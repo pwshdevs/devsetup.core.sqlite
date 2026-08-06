@@ -1,10 +1,10 @@
 # See http://www.appveyor.com/docs/appveyor-yml for many more options
-os: Visual Studio 2015
+image: Visual Studio 2022
 
 # Init variables for publishing to PowerShell Gallery or GitHub
 environment:
-  ModuleName: $(APPVEYOR_PROJECT_NAME) # Hard code if you really need to...
-  GitHubRelease: $(APPVEYOR_PROJECT_NAME)-v1.1.0 # TODO: extract version from PSD1...
+  ModuleName: devsetup.core.sqlite
+  GitHubRelease: devsetup.core.sqlite-v2.0.0 # TODO: extract version from PSD1...
   NugetApiKey: # Add your API key to AppVeyor, paste the encrypted bit here
     secure: oqMFzG8F65K5l572V7VzlZIWU7xnSYDLtSXECJAAURrXe8M2+BAp9vHLT+1h1lR0
 
@@ -16,21 +16,16 @@ skip_tags: true
 skip_commits:
   message: /updated readme.*/
 
-# PS2 compat
 install:
   - cinst pester -y --version=4.10.1
 
 # Package things up.
 build_script:
+  - dotnet build src\devsetup.core.sqlite.Support\devsetup.core.sqlite.Support.csproj --configuration Release
   - 7z a %ModuleName%.zip %ModuleName%\
 
-# Test with native PS and PS version 2. Upload test results
+# Test with Windows PowerShell and upload test results
 test_script:
-  # Set up pester path for PSv2
-  - ps: . .\Tests\Helpers\Initialize-PesterPath.ps1
-  # Test in PSv2
-  - ps: powershell.exe -version 2.0 -executionpolicy bypass -noprofile -file .\Tests\Helpers\Invoke-PesterFromAppveyor.ps1
-  # Test in native PS
   - ps: . .\Tests\Helpers\Invoke-PesterFromAppveyor.ps1
   # Collect all test results, fail if any failures
   - ps: . .\Tests\Helpers\Read-PesterOutput.ps1

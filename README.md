@@ -1,9 +1,25 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/7pm5cjeoqx09i3co/branch/master?svg=true)](https://ci.appveyor.com/project/RamblingCookieMonster/pssqlite)
-
-PSSQLite PowerShell Module
+devsetup.core.sqlite PowerShell Module
 =============
 
 This is a PowerShell module for working with SQLite.  It uses similar syntax to the [Invoke-Sqlcmd2](https://github.com/RamblingCookieMonster/PowerShell/blob/master/Invoke-Sqlcmd2.ps1) function from Chad Miller et al.
+
+devsetup.core.sqlite 2.x bundles System.Data.SQLite 2.0.4 and SQLite 3.53.4. It requires Windows PowerShell 5.1 with .NET Framework 4.7.2 or PowerShell 7+.
+
+PowerShell Core runtime support includes Windows x86/x64/ARM64, Linux x64/ARM/ARM64, and macOS x64/ARM64.
+
+The module's managed support library targets .NET Standard 2.0 and AnyCPU, so the same DLL is used
+on every supported operating system and processor architecture. Build it and copy it into the module
+with:
+
+```powershell
+dotnet build .\src\devsetup.core.sqlite.Support\devsetup.core.sqlite.Support.csproj -c Release
+```
+
+Connections created by `New-SQLiteConnection` and `Invoke-SQLiteQuery` use culture-independent
+date/time parsing and UTC semantics by default. This handles common SQLite timestamp forms,
+including values with a separated offset such as `2019-07-02 04:59:18.578 +00:00`. For databases
+with a fixed custom representation, use `-DateTimeFormatString` and, when needed, override
+`-DateTimeFormat` or `-DateTimeKind`.
 
 This covers limited functionality; contributions to this function or additional functions would be welcome!
 
@@ -31,16 +47,16 @@ Insert large quantities of data quickly with transactions ([why?](http://www.sql
 # One time setup
     # Download the repository
     # Unblock the zip
-    # Extract the PSSQLite folder to a module path (e.g. $env:USERPROFILE\Documents\WindowsPowerShell\Modules\)
+    # Extract the devsetup.core.sqlite folder to a module path (e.g. $env:USERPROFILE\Documents\WindowsPowerShell\Modules\)
 
     #Simple alternative, if you have PowerShell 5, or the PowerShellGet module:
-        Install-Module PSSQLite
+        Install-Module devsetup.core.sqlite
 
 # Import the module.
-    Import-Module PSSQLite    #Alternatively, Import-Module \\Path\To\PSSQLite
+    Import-Module devsetup.core.sqlite    #Alternatively, Import-Module \\Path\To\devsetup.core.sqlite
 
 # Get commands in the module
-    Get-Command -Module PSSQLite
+    Get-Command -Module devsetup.core.sqlite
 
 # Get help for a command
     Get-Help Invoke-SQLiteQuery -Full
@@ -73,7 +89,7 @@ Insert large quantities of data quickly with transactions ([why?](http://www.sql
             givenname = "$_"
             BirthDate = (Get-Date).Adddays(-$_)
         }
-    } | Out-DataTable
+    } | ConvertTo-SqliteDataTable
 
 #Insert the data within a single transaction (SQLite is faster this way)
     Invoke-SQLiteBulkCopy -DataTable $DataTable -DataSource $DataSource -Table Names -NotifyAfter 1000 -verbose

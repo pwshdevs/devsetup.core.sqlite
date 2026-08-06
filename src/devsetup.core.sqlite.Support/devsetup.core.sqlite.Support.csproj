@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AssemblyName>devsetup.core.sqlite.Support</AssemblyName>
+    <RootNamespace>DevSetup.Core.SQLite</RootNamespace>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ModuleLibraryDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../devsetup.core.sqlite/lib'))</ModuleLibraryDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PowerShellStandard.Library" Version="5.1.1" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="CopySupportAssemblyToModule" AfterTargets="Build" Condition="'$(CopySupportAssemblyToModule)' != 'false'">
+    <MakeDir Directories="$(ModuleLibraryDirectory)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModuleLibraryDirectory)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
