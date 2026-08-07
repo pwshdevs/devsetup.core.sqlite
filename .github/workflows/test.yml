@@ -10,15 +10,42 @@ permissions:
 
 jobs:
   test-powershell:
-    name: PowerShell 7 (${{ matrix.os }})
+    name: PowerShell 7 (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - name: Ubuntu x64
+            os: ubuntu-latest
+            architecture: X64
+          - name: Ubuntu ARM64
+            os: ubuntu-24.04-arm
+            architecture: Arm64
+          - name: Windows x64
+            os: windows-latest
+            architecture: X64
+          - name: Windows ARM64
+            os: windows-11-arm
+            architecture: Arm64
+          - name: macOS x64
+            os: macos-15-intel
+            architecture: X64
+          - name: macOS ARM64
+            os: macos-15
+            architecture: Arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Verify runner architecture
+        shell: pwsh
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          $actualArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+          if ($actualArchitecture -ne $env:EXPECTED_ARCHITECTURE) {
+              throw "Expected $env:EXPECTED_ARCHITECTURE but PowerShell is running as $actualArchitecture."
+          }
       - name: Test
         shell: pwsh
         run: ./build.ps1 -Task Test -Bootstrap
@@ -32,4 +59,3 @@ jobs:
       - name: Test
         shell: powershell
         run: ./build.ps1 -Task Test -Bootstrap
-

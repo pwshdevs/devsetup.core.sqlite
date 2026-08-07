@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Culture-independent UTC date/time parsing with support for configurable provider formats.
 - A precompiled AnyCPU support library for DBNull-to-null conversion without runtime C# compilation.
 - GitHub Actions workflows, PlatyPS documentation, project governance files, and a reproducible Lath build.
+- Native GitHub Actions test coverage for x64 and ARM64 on Windows, Linux, and macOS.
 - A repository-only SQLite runtime updater integrated with the automated maintenance canary.
 - High-level `Get-SqliteRow`, `Add-SqliteRow`, `Set-SqliteRow`, and `Remove-SqliteRow` commands with quoted identifiers and parameterized values.
 - Safe mutation defaults that require a filter or explicit `-All`, plus portable ordered/limited updates and deletes for rowid and composite-key tables.
@@ -26,4 +27,3 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Moved the legacy nested DataTable and bulk-copy helpers into documented, individually named private files.
 - Normalized the build-process PATH under WSL and limited Unix script-analysis input to PowerShell files, avoiding slow Windows command discovery and a PSScriptAnalyzer null reference on bundled native runtime trees.
 - Made build-dependency cleanup tolerate manifests that omit the optional `RequiredModules` key under strict mode.
-
