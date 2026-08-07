@@ -12,7 +12,7 @@
     <DebugType>none</DebugType>
     <Optimize>true</Optimize>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <ModuleLibraryDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../devsetup.core.sqlite/lib'))</ModuleLibraryDirectory>
+    <ModuleLibraryDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../devsetup.core.sqlite/lib'))</ModuleLibraryDirectory>
   </PropertyGroup>
 
   <ItemGroup>

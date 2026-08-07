@@ -1,109 +1,184 @@
-devsetup.core.sqlite PowerShell Module
-=============
+# devsetup.core.sqlite
 
-This is a PowerShell module for working with SQLite.  It uses similar syntax to the [Invoke-Sqlcmd2](https://github.com/RamblingCookieMonster/PowerShell/blob/master/Invoke-Sqlcmd2.ps1) function from Chad Miller et al.
+**Github**
 
-devsetup.core.sqlite 2.x bundles System.Data.SQLite 2.0.4 and SQLite 3.53.4. It requires Windows PowerShell 5.1 with .NET Framework 4.7.2 or PowerShell 7+.
+[![GitHub Actions Status][github-actions-badge]][github-actions-build] [![GitHub Actions Status][github-actions-badge-publish]][github-actions-build] [![GitHub Actions Status][github-actions-badge-canary]][github-actions-build] [![GitHub Open Issues Status][github-open-issues-badge]][github-open-issues] [![GitHub Closed Issues Status][github-closed-issues-badge]][github-closed-issues] [![License][license-badge]][license]
 
-PowerShell Core runtime support includes Windows x86/x64/ARM64, Linux x64/ARM/ARM64, and macOS x64/ARM64.
+**PSGallery**
 
-The module's managed support library targets .NET Standard 2.0 and AnyCPU, so the same DLL is used
-on every supported operating system and processor architecture. Build it and copy it into the module
-with:
+[![PowerShell Gallery][psgallery-badge]][psgallery] [![PSGallery Version][psgallery-version-badge]][psgallery] [![PSGallery Playform][psgallery-platform-badge]][psgallery] [![PSGallery Playform][ps-desktop-badge]][psgallery]
 
-```powershell
-dotnet build .\src\devsetup.core.sqlite.Support\devsetup.core.sqlite.Support.csproj -c Release
-```
+A cross-platform PowerShell module for querying SQLite databases and efficiently importing data on Windows, Linux, and macOS.
 
-Connections created by `New-SQLiteConnection` and `Invoke-SQLiteQuery` use culture-independent
-date/time parsing and UTC semantics by default. This handles common SQLite timestamp forms,
-including values with a separated offset such as `2019-07-02 04:59:18.578 +00:00`. For databases
-with a fixed custom representation, use `-DateTimeFormatString` and, when needed, override
-`-DateTimeFormat` or `-DateTimeKind`.
+## Features
 
-This covers limited functionality; contributions to this function or additional functions would be welcome!
+- Execute SQL from a query string or file.
+- Read, insert, update, and delete table rows without writing routine SQL.
+- Use parameterized queries and reusable SQLite connections.
+- Return results as PowerShell objects, data rows, data tables, data sets, or scalar values.
+- Convert PowerShell objects into a `DataTable` and bulk insert them in a transaction.
+- Parse common SQLite timestamps using culture-independent UTC defaults.
+- Override the provider's date/time format for databases with custom timestamp representations.
+- Run natively on supported Windows, Linux, and macOS x64 and ARM architectures.
 
-Caveats:
-* Minimal testing.
-* Today was my first time working with SQLite
+Version 1.0.0 bundles System.Data.SQLite 2.0.4 and SQLite 3.53.4. Windows PowerShell 5.1 requires .NET Framework 4.7.2 or later; PowerShell 7+ is supported across platforms.
 
-## Functionality
+## Installation
 
-Create a SQLite database and table:
-  * ![Create a SQLite database and table](/Media/Create.png)
-
-Query a SQLite database, using parameters:
-  * ![Query a SQLite database](/Media/Query.png)
-
-Create a SQLite connection, use it for subsequent queries:
-  * ![Create a SQLite connection, use it](/Media/Connection.png)
-
-Insert large quantities of data quickly with transactions ([why?](http://www.sqlite.org/faq.html#q19)):
-  * ![Insert large quantities of data quickly](/Media/Transaction.png)
-
-## Instructions
+Install from the PowerShell Gallery:
 
 ```powershell
-# One time setup
-    # Download the repository
-    # Unblock the zip
-    # Extract the devsetup.core.sqlite folder to a module path (e.g. $env:USERPROFILE\Documents\WindowsPowerShell\Modules\)
-
-    #Simple alternative, if you have PowerShell 5, or the PowerShellGet module:
-        Install-Module devsetup.core.sqlite
-
-# Import the module.
-    Import-Module devsetup.core.sqlite    #Alternatively, Import-Module \\Path\To\devsetup.core.sqlite
-
-# Get commands in the module
-    Get-Command -Module devsetup.core.sqlite
-
-# Get help for a command
-    Get-Help Invoke-SQLiteQuery -Full
-
-# Create a database and a table
-    $Query = "CREATE TABLE NAMES (fullname VARCHAR(20) PRIMARY KEY, surname TEXT, givenname TEXT, BirthDate DATETIME)"
-    $DataSource = "C:\Names.SQLite"
-
-    Invoke-SqliteQuery -Query $Query -DataSource $DataSource
-
-# View table info
-    Invoke-SqliteQuery -DataSource $DataSource -Query "PRAGMA table_info(NAMES)"
-
-# Insert some data, use parameters for the fullname and birthdate
-    $query = "INSERT INTO NAMES (fullname, surname, givenname, birthdate) VALUES (@full, 'Cookie', 'Monster', @BD)"
-
-    Invoke-SqliteQuery -DataSource $DataSource -Query $query -SqlParameters @{
-        full = "Cookie Monster"
-        BD   = (get-date).addyears(-3)
-    }
-
-# View the data
-    Invoke-SqliteQuery -DataSource $DataSource -Query "SELECT * FROM NAMES"
-
-#Build up some fake data to bulk insert, convert it to a datatable
-    $DataTable = 1..10000 | %{
-        [pscustomobject]@{
-            fullname = "Name $_"
-            surname = "Name"
-            givenname = "$_"
-            BirthDate = (Get-Date).Adddays(-$_)
-        }
-    } | ConvertTo-SqliteDataTable
-
-#Insert the data within a single transaction (SQLite is faster this way)
-    Invoke-SQLiteBulkCopy -DataTable $DataTable -DataSource $DataSource -Table Names -NotifyAfter 1000 -verbose
-
-#View all the data!
-    Invoke-SqliteQuery -DataSource $DataSource -Query "SELECT * FROM NAMES"
+Install-PSResource -Name devsetup.core.sqlite
 ```
 
-## Notes
+For Windows PowerShell 5.1:
 
-This isn't a fully featured module or function.
+```powershell
+Install-Module -Name devsetup.core.sqlite
+```
 
-I'm planning to write about using SQL from a systems administrator or engineer standpoint.  I personally stick to [MSSQL and Invoke-Sqlcmd2](https://ramblingcookiemonster.wordpress.com/2014/03/12/sql-for-powershell-for-sql-newbies/), but want to provide an abstracted means to perform this without the prerequisite of an accessible MSSQL instance.
+## Quick start
 
-Check out Jim Christopher's [SQLite PowerShell Provider](https://psqlite.codeplex.com/).  It offers more functionality and flexibility than this repository.
+```powershell
+Import-Module devsetup.core.sqlite
 
-Credit to Chad Miller, Justin Dearing, Paul Bryson, Joel Bennett, and Dave Wyatt for the code carried over from Invoke-Sqlcmd2.
+$database = Join-Path $PWD 'example.sqlite'
+
+Invoke-SqliteQuery -DataSource $database -Query @'
+CREATE TABLE Items (
+    Id INTEGER PRIMARY KEY,
+    Name TEXT NOT NULL,
+    CreatedAt DATETIME
+);
+'@
+
+Invoke-SqliteQuery -DataSource $database -Query @'
+INSERT INTO Items (Id, Name, CreatedAt)
+VALUES (@Id, @Name, @CreatedAt);
+'@ -SqlParameters @{
+    Id = 1
+    Name = 'example'
+    CreatedAt = [datetime]::UtcNow
+}
+
+Invoke-SqliteQuery -DataSource $database -Query 'SELECT * FROM Items'
+
+Add-SqliteRow -DataSource $database -On Items -Data @(
+    @{ Id = 2; Name = 'second'; CreatedAt = [datetime]::UtcNow }
+    @{ Id = 3; Name = 'third'; CreatedAt = [datetime]::UtcNow }
+)
+
+Get-SqliteRow -DataSource $database -On Items -OrderBy Id -Limit 10
+```
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `Add-SqliteRow` | Insert dictionaries or objects with a prepared statement and transaction. |
+| `New-SqliteConnection` | Create and optionally open a reusable SQLite connection. |
+| `Get-SqliteRow` | Select rows with structured filters, projection, ordering, and paging. |
+| `Invoke-SqliteQuery` | Execute SQL and return PowerShell or ADO.NET results. |
+| `ConvertTo-SqliteDataTable` | Convert pipeline objects into a `DataTable`. |
+| `Invoke-SqliteBulkCopy` | Insert a `DataTable` using a transaction. |
+| `Set-SqliteRow` | Update safely scoped rows, including deterministic ordered limits. |
+| `Remove-SqliteRow` | Delete safely scoped rows, including deterministic ordered limits. |
+
+Use `Get-Help <command> -Full` for complete command documentation.
+
+## Structured row operations
+
+Use `-Where` for common equality filters. Column names are quoted, values are parameterized, multiple
+entries are joined with `AND`, and `$null` becomes `IS NULL`:
+
+```powershell
+Set-SqliteRow -DataSource $database -On Items `
+    -Values @{ Name = 'renamed' } `
+    -Where @{ Id = 2 }
+
+Remove-SqliteRow -DataSource $database -On Items `
+    -Where @{ Id = 3 } `
+    -Confirm:$false
+```
+
+`Set-SqliteRow` and `Remove-SqliteRow` refuse an empty filter. Use `-All` when the broad scope is
+intentional. A limited mutation also requires `-OrderBy`, giving it deterministic behavior on normal
+rowid tables and tables with single or composite primary keys, including `WITHOUT ROWID` tables.
+
+For predicates beyond equality, use `-WhereSql` with `-SqlParameters`. The original
+`Invoke-SqliteQuery` remains available for arbitrary SQL.
+
+## Date and time behavior
+
+Connections created by `New-SqliteConnection` and `Invoke-SqliteQuery` default to `InvariantCulture` parsing and UTC normalization. This supports common SQLite timestamps, including offset values such as `2019-07-02 04:59:18.578 +00:00`.
+
+For a fixed custom representation, supply an exact .NET format string:
+
+```powershell
+$connection = New-SqliteConnection -DataSource $database `
+    -DateTimeFormatString 'yyyy-MM-dd HH:mm:ss.FFF zzz' `
+    -DateTimeKind Utc
+```
+
+## Supported runtimes
+
+PowerShell 7 uses bundled runtime-specific assets for:
+
+- Windows x86, x64, and ARM64
+- Linux x64, ARM, and ARM64
+- macOS x64 and ARM64
+
+Windows PowerShell 5.1 uses the bundled Windows x86 or x64 .NET Framework provider.
+
+## Development
+
+This repository uses the Lath project layout. Module source is under `src/devsetup.core.sqlite`; build, test, documentation, and CI files live at the project root.
+
+Bootstrap the pinned development dependencies and run the complete build:
+
+```powershell
+./build.ps1 -Task Test -Bootstrap
+```
+
+The DBNull conversion helper is a committed, architecture-neutral .NET Standard 2.0 assembly. Rebuild it only when its C# source changes:
+
+```powershell
+dotnet build ./src/devsetup.core.sqlite.Support/devsetup.core.sqlite.Support.csproj -c Release
+```
+
+The project build copies the helper to `src/devsetup.core.sqlite/lib`. The same managed DLL is used by Windows PowerShell 5.1 and PowerShell 7 on every supported operating system and architecture.
+
+Bundled SQLite versions are pinned in `tools/SQLiteDependencies.psd1`. Maintainers can refresh one runtime or every runtime from a single NuGet download:
+
+```powershell
+./tools/Update-SqliteRuntime.ps1 -All
+```
+
+The scheduled maintenance canary checks for newer stable build and SQLite dependencies. When changes are available, it refreshes the committed runtime assets, increments the module patch version, updates the changelog, validates the exact candidate, and opens a publish-ready pull request.
+
+PlatyPS source documentation is stored under `docs/en-US`. GitHub Actions validates PowerShell 7 on Windows, Linux, and macOS, plus Windows PowerShell 5.1.
+
+## Contributing
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## License
+
+devsetup.core.sqlite is available under the [MIT License](LICENSE).
+
+[github-actions-badge]: https://img.shields.io/github/actions/workflow/status/pwshdevs/devsetup.core.sqlite/test.yml?label=build&style=for-the-badge
+[github-actions-badge-publish]: https://img.shields.io/github/actions/workflow/status/pwshdevs/devsetup.core.sqlite/publish.yml?label=publish&style=for-the-badge
+[github-actions-badge-canary]: https://img.shields.io/github/actions/workflow/status/pwshdevs/devsetup.core.sqlite/canary.yml?label=canary&style=for-the-badge
+[github-actions-build]: https://github.com/pwshdevs/devsetup.core.sqlite/actions
+[psgallery-badge]: https://img.shields.io/powershellgallery/dt/devsetup.core.sqlite?label=downloads&style=for-the-badge
+[psgallery]: https://www.powershellgallery.com/packages/devsetup.core.sqlite
+[psgallery-version-badge]: https://img.shields.io/powershellgallery/v/devsetup.core.sqlite?label=version&style=for-the-badge
+[license-badge]: https://img.shields.io/github/license/pwshdevs/devsetup.core.sqlite?style=for-the-badge
+[license]: https://raw.githubusercontent.com/pwshdevs/devsetup.core.sqlite/main/LICENSE
+[github-open-issues-badge]: https://img.shields.io/github/issues/pwshdevs/devsetup.core.sqlite?style=for-the-badge
+[github-closed-issues-badge]: https://img.shields.io/github/issues-closed/pwshdevs/devsetup.core.sqlite?style=for-the-badge
+[github-closed-issues]: https://github.com/pwshdevs/devsetup.core.sqlite/issues?q=is%3Aissue%20state%3Aclosed
+[github-open-issues]: https://github.com/pwshdevs/devsetup.core.sqlite/issues
+[psgallery-platform-badge]: https://img.shields.io/powershellgallery/p/devsetup.core.sqlite?style=for-the-badge
+[ps-desktop-badge]: https://img.shields.io/badge/powershell-5.1,_7.0+-blue?style=for-the-badge
+[ps-core-badge]: https://img.shields.io/badge/powershell-5.1,_7.0+-blue?style=for-the-badge

@@ -1,0 +1,28 @@
+{
+    "name": "PowerShell",
+    "dockerFile": "Dockerfile",
+    "remoteUser": "vscode",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "/usr/bin/bash",
+                        "icon": "terminal-bash"
+                    },
+                    "pwsh": {
+                        "path": "/usr/bin/pwsh",
+                        "icon": "terminal-powershell"
+                    }
+                },
+                "terminal.integrated.defaultProfile.linux": "pwsh"
+            },
+            "extensions": [
+                "ms-vscode.powershell",
+                "davidanson.vscode-markdownlint"
+            ]
+        }
+    },
+    "postCreateCommand": "pwsh -NoProfile -File ./build.ps1 -Task Init -Bootstrap"
+}
+

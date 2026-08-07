@@ -1,93 +1,137 @@
-#handle PS2
-if(-not $PSScriptRoot)
-{
-    $PSScriptRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+BeforeAll {
+    $script:PSVersion = $PSVersionTable.PSVersion.Major
+    $script:VerboseParameters = @{}
+
+    $sourceManifest = if ($env:BHPSModuleManifest) {
+        $env:BHPSModuleManifest
+    } else {
+        Join-Path $PSScriptRoot '../src/devsetup.core.sqlite/devsetup.core.sqlite.psd1'
+    }
+
+    $manifestData = Import-PowerShellDataFile -Path $sourceManifest
+    $projectRoot = if ($env:BHProjectPath) {
+        $env:BHProjectPath
+    } else {
+        Split-Path $PSScriptRoot -Parent
+    }
+    $script:SQLiteDependencies = Import-PowerShellDataFile `
+        -LiteralPath (Join-Path $projectRoot 'tools/SQLiteDependencies.psd1')
+    $providerPackageVersion = [version]$script:SQLiteDependencies.ProviderVersion
+    $providerBuild = if ($providerPackageVersion.Build -lt 0) { 0 } else { $providerPackageVersion.Build }
+    $providerRevision = if ($providerPackageVersion.Revision -lt 0) { 0 } else { $providerPackageVersion.Revision }
+    $script:ExpectedProviderAssemblyVersion = '{0}.{1}.{2}.{3}' -f `
+        $providerPackageVersion.Major,
+        $providerPackageVersion.Minor,
+        $providerBuild,
+        $providerRevision
+    $outputManifest = Join-Path $projectRoot "Output/devsetup.core.sqlite/$($manifestData.ModuleVersion)/devsetup.core.sqlite.psd1"
+    $moduleManifest = if (Test-Path -LiteralPath $outputManifest -PathType Leaf) {
+        $outputManifest
+    } else {
+        $sourceManifest
+    }
+
+    Get-Module devsetup.core.sqlite | Remove-Module -Force -ErrorAction Ignore
+    Import-Module $moduleManifest -Force -ErrorAction Stop
+
+    $script:SQLiteFile = Join-Path $TestDrive 'Working.SQLite'
+    Copy-Item (Join-Path $PSScriptRoot 'Names.SQLite') $script:SQLiteFile -Force
+
+    $script:NewTestDataTable = {
+        1..1000 | ForEach-Object {
+            [pscustomobject]@{
+                fullname  = "Name $_"
+                surname   = 'Name'
+                givenname = "$_"
+                BirthDate = (Get-Date).AddDays(-$_)
+            }
+        } | ConvertTo-SqliteDataTable
+    }
 }
 
-$Verbose = @{}
-if($env:APPVEYOR_REPO_BRANCH -and $env:APPVEYOR_REPO_BRANCH -notlike "master")
-{
-    $Verbose.add("Verbose",$True)
+AfterAll {
+    [System.Data.SQLite.SQLiteConnection]::ClearAllPools()
+    Get-Module devsetup.core.sqlite | Remove-Module -Force -ErrorAction Ignore
 }
 
-$PSVersion = $PSVersionTable.PSVersion.Major
-Import-Module $PSScriptRoot\..\devsetup.core.sqlite -Force
-
-$SQLiteFile = "$PSScriptRoot\Working.SQLite"
-Remove-Item $SQLiteFile  -force -ErrorAction SilentlyContinue
-Copy-Item $PSScriptRoot\Names.SQLite $PSScriptRoot\Working.SQLite -force
-
-Describe "New-SQLiteConnection PS$PSVersion" {
-    
-    Context 'Strict mode' { 
-
-        Set-StrictMode -Version latest
-
-        It 'should create a connection' {
-            $Script:Connection = New-SQLiteConnection @Verbose -DataSource :MEMORY:
-            $Script:Connection.ConnectionString | Should be "Data Source=:MEMORY:;DateTimeFormat=InvariantCulture;DateTimeKind=Utc"
-            $Script:Connection.State | Should be "Open"
+Describe "New-SQLiteConnection PS$script:PSVersion" {
+    Context 'Strict mode' {
+        BeforeAll {
+            Set-StrictMode -Version Latest
         }
 
-        It 'should expose configurable date and time parsing options' {
-            $Connection = New-SQLiteConnection -DataSource :MEMORY: `
+        It 'creates an open connection with sane date/time defaults' {
+            $connection = New-SQLiteConnection @script:VerboseParameters -DataSource :MEMORY:
+            try {
+                $connection.ConnectionString | Should -Be 'Data Source=:MEMORY:;DateTimeFormat=InvariantCulture;DateTimeKind=Utc'
+                $connection.State | Should -Be 'Open'
+            } finally {
+                $connection.Dispose()
+            }
+        }
+
+        It 'exposes configurable date/time parsing options' {
+            $connection = New-SQLiteConnection -DataSource :MEMORY: `
                 -DateTimeFormat ISO8601 `
                 -DateTimeKind Local `
                 -DateTimeFormatString 'yyyyMMdd-HHmmss' `
                 -Open $false
 
             try {
-                $Builder = New-Object System.Data.SQLite.SQLiteConnectionStringBuilder($Connection.ConnectionString)
-                $Builder.DateTimeFormat | Should Be ([System.Data.SQLite.SQLiteDateFormats]::ISO8601)
-                $Builder.DateTimeKind | Should Be ([System.DateTimeKind]::Local)
-                $Builder.DateTimeFormatString | Should Be 'yyyyMMdd-HHmmss'
-                $Connection.State | Should Be 'Closed'
-            }
-            finally {
-                $Connection.Dispose()
+                $builder = New-Object System.Data.SQLite.SQLiteConnectionStringBuilder($connection.ConnectionString)
+                $builder.DateTimeFormat | Should -Be ([System.Data.SQLite.SQLiteDateFormats]::ISO8601)
+                $builder.DateTimeKind | Should -Be ([System.DateTimeKind]::Local)
+                $builder.DateTimeFormatString | Should -Be 'yyyyMMdd-HHmmss'
+                $connection.State | Should -Be 'Closed'
+            } finally {
+                $connection.Dispose()
             }
         }
 
-        It 'should load the current provider and SQLite engine' {
-            [System.Data.SQLite.SQLiteConnection].Assembly.GetName().Version.ToString() | Should Be '2.0.4.0'
+        It 'loads the expected provider and SQLite engine' {
+            [System.Data.SQLite.SQLiteConnection].Assembly.GetName().Version.ToString() |
+                Should -Be $script:ExpectedProviderAssemblyVersion
 
-            $Command = $Script:Connection.CreateCommand()
+            $connection = New-SQLiteConnection -DataSource :MEMORY:
+            $command = $connection.CreateCommand()
             try {
-                $Command.CommandText = 'SELECT sqlite_version()'
-                $Command.ExecuteScalar() | Should Be '3.53.4'
-            }
-            finally {
-                $Command.Dispose()
+                $command.CommandText = 'SELECT sqlite_version()'
+                $command.ExecuteScalar() | Should -Be $script:SQLiteDependencies.SQLiteVersion
+            } finally {
+                $command.Dispose()
+                $connection.Dispose()
             }
         }
     }
 }
 
-Describe "devsetup.core.sqlite runtime assets PS$PSVersion" {
-
+Describe "devsetup.core.sqlite runtime assets PS$script:PSVersion" {
     Context 'Supported runtimes' {
-
-        It 'should load under the devsetup.core.sqlite identity' {
-            $Module = Get-Module devsetup.core.sqlite
-            $Module.Name | Should Be 'devsetup.core.sqlite'
-            $Module.Guid.ToString() | Should Be '1616685c-c7c0-457c-b156-a00a52e9890f'
-            (Get-Module PSSQLite).Count | Should Be 0
-            (Get-Command ConvertTo-SqliteDataTable -Module devsetup.core.sqlite).Name | Should Be 'ConvertTo-SqliteDataTable'
-            @(Get-Command Out-DataTable -Module devsetup.core.sqlite -ErrorAction SilentlyContinue).Count | Should Be 0
+        It 'loads under the devsetup.core.sqlite identity' {
+            $module = Get-Module devsetup.core.sqlite
+            $module.Name | Should -Be 'devsetup.core.sqlite'
+            $module.Version.ToString() | Should -Be '1.0.0'
+            $module.Guid.ToString() | Should -Be '94cc58ab-63cf-43d0-9978-bb124a56691b'
+            @(Get-Module PSSQLite).Count | Should -Be 0
+            (Get-Command ConvertTo-SqliteDataTable -Module devsetup.core.sqlite).Name | Should -Be 'ConvertTo-SqliteDataTable'
+            @(Get-Command Out-DataTable -Module devsetup.core.sqlite -ErrorAction SilentlyContinue).Count | Should -Be 0
+            @(Get-Command Update-Sqlite -Module devsetup.core.sqlite -ErrorAction SilentlyContinue).Count | Should -Be 0
         }
 
-        It 'should load the precompiled portable support assembly' {
-            $SupportAssemblyPath = Join-Path $PSScriptRoot '..\devsetup.core.sqlite\lib\devsetup.core.sqlite.Support.dll'
+        It 'loads the precompiled portable support assembly' {
+            $module = Get-Module devsetup.core.sqlite
+            $supportAssemblyPath = Join-Path $module.ModuleBase 'lib/devsetup.core.sqlite.Support.dll'
 
-            (Test-Path -LiteralPath $SupportAssemblyPath -PathType Leaf) | Should Be $true
-            [System.Reflection.AssemblyName]::GetAssemblyName($SupportAssemblyPath).Name |
-                Should Be 'devsetup.core.sqlite.Support'
+            Test-Path -LiteralPath $supportAssemblyPath -PathType Leaf | Should -Be $true
+            [System.Reflection.AssemblyName]::GetAssemblyName($supportAssemblyPath).Name |
+                Should -Be 'devsetup.core.sqlite.Support'
             ('DevSetup.Core.SQLite.DBNullScrubber' -as [type]).Assembly.GetName().Name |
-                Should Be 'devsetup.core.sqlite.Support'
+                Should -Be 'devsetup.core.sqlite.Support'
         }
 
-        It 'should bundle every supported PowerShell Core runtime' {
-            $RuntimeFiles = @{
+        It 'bundles every supported PowerShell Core runtime' {
+            $module = Get-Module devsetup.core.sqlite
+            $runtimeFiles = @{
                 'linux-arm'   = 'libe_sqlite3.so'
                 'linux-arm64' = 'libe_sqlite3.so'
                 'linux-x64'   = 'libe_sqlite3.so'
@@ -98,227 +142,195 @@ Describe "devsetup.core.sqlite runtime assets PS$PSVersion" {
                 'win-x86'     = 'e_sqlite3.dll'
             }
 
-            foreach($RuntimeIdentifier in $RuntimeFiles.Keys)
-            {
-                $RuntimePath = Join-Path $PSScriptRoot "..\devsetup.core.sqlite\core\$RuntimeIdentifier"
-                (Test-Path -LiteralPath (Join-Path $RuntimePath 'System.Data.SQLite.dll') -PathType Leaf) | Should Be $true
-                (Test-Path -LiteralPath (Join-Path $RuntimePath $RuntimeFiles[$RuntimeIdentifier]) -PathType Leaf) | Should Be $true
-                [System.Reflection.AssemblyName]::GetAssemblyName((Join-Path $RuntimePath 'System.Data.SQLite.dll')).Version.ToString() | Should Be '2.0.4.0'
+            foreach ($runtimeIdentifier in $runtimeFiles.Keys) {
+                $runtimePath = Join-Path $module.ModuleBase "core/$runtimeIdentifier"
+                Test-Path -LiteralPath (Join-Path $runtimePath 'System.Data.SQLite.dll') -PathType Leaf | Should -Be $true
+                Test-Path -LiteralPath (Join-Path $runtimePath $runtimeFiles[$runtimeIdentifier]) -PathType Leaf | Should -Be $true
+                [System.Reflection.AssemblyName]::GetAssemblyName((Join-Path $runtimePath 'System.Data.SQLite.dll')).Version.ToString() |
+                    Should -Be $script:ExpectedProviderAssemblyVersion
             }
         }
 
-        It 'should resolve supported ARM runtime identifiers' {
-            $Module = Get-Module devsetup.core.sqlite
-            $RuntimeCases = @(
-                @{ Platform = 'linux'; Architecture = 'Arm'; Expected = 'linux-arm' },
-                @{ Platform = 'linux'; Architecture = 'Arm64'; Expected = 'linux-arm64' },
-                @{ Platform = 'osx'; Architecture = 'Arm64'; Expected = 'osx-arm64' },
+        It 'resolves supported ARM runtime identifiers' {
+            $module = Get-Module devsetup.core.sqlite
+            $runtimeCases = @(
+                @{ Platform = 'linux'; Architecture = 'Arm'; Expected = 'linux-arm' }
+                @{ Platform = 'linux'; Architecture = 'Arm64'; Expected = 'linux-arm64' }
+                @{ Platform = 'osx'; Architecture = 'Arm64'; Expected = 'osx-arm64' }
                 @{ Platform = 'win'; Architecture = 'Arm64'; Expected = 'win-arm64' }
             )
 
-            foreach($RuntimeCase in $RuntimeCases)
-            {
-                & $Module {
+            foreach ($runtimeCase in $runtimeCases) {
+                & $module {
                     Get-DevSetupSQLiteRuntimeIdentifier -Platform $args[0] -Architecture $args[1]
-                } $RuntimeCase.Platform $RuntimeCase.Architecture | Should Be $RuntimeCase.Expected
+                } $runtimeCase.Platform $runtimeCase.Architecture | Should -Be $runtimeCase.Expected
             }
         }
 
-        It 'should reject runtime identifiers without bundled native assets' {
-            $Module = Get-Module devsetup.core.sqlite
-            { & $Module { Get-DevSetupSQLiteRuntimeIdentifier -Platform osx -Architecture Arm } } | Should Throw
+        It 'rejects runtime identifiers without bundled native assets' {
+            $module = Get-Module devsetup.core.sqlite
+            { & $module { Get-DevSetupSQLiteRuntimeIdentifier -Platform osx -Architecture Arm } } |
+                Should -Throw
         }
     }
 }
 
-Describe "Invoke-SQLiteQuery PS$PSVersion" {
-    
-    Context 'Strict mode' { 
-
-        Set-StrictMode -Version latest
-
-        It 'should take file input' {
-            $Out = @( Invoke-SqliteQuery @Verbose -DataSource $SQLiteFile -InputFile $PSScriptRoot\Test.SQL )
-            $Out.count | Should be 2
-            $Out[1].OrderID | Should be 500
+Describe "Invoke-SQLiteQuery PS$script:PSVersion" {
+    Context 'Strict mode' {
+        BeforeAll {
+            Set-StrictMode -Version Latest
         }
 
-        It 'should take query input' {
-            $Out = @( Invoke-SQLiteQuery @Verbose -Database $SQLiteFile -Query "PRAGMA table_info(NAMES)" -ErrorAction Stop )
-            $Out.count | Should Be 4
-            $Out[0].Name | SHould Be "fullname"
+        It 'accepts file input' {
+            $output = @(Invoke-SqliteQuery @script:VerboseParameters -DataSource $script:SQLiteFile -InputFile (Join-Path $PSScriptRoot 'Test.SQL'))
+            $output.Count | Should -Be 2
+            $output[1].OrderID | Should -Be 500
         }
 
-        It 'should reuse the module-level DBNull scrubber without compiling per query' {
+        It 'accepts query input' {
+            $output = @(Invoke-SQLiteQuery @script:VerboseParameters -Database $script:SQLiteFile -Query 'PRAGMA table_info(NAMES)' -ErrorAction Stop)
+            $output.Count | Should -Be 4
+            $output[0].Name | Should -Be 'fullname'
+        }
+
+        It 'reuses the precompiled DBNull scrubber without compiling per query' {
             ('DevSetup.Core.SQLite.DBNullScrubber' -as [type]).FullName |
-                Should Be 'DevSetup.Core.SQLite.DBNullScrubber'
+                Should -Be 'DevSetup.Core.SQLite.DBNullScrubber'
 
             Mock -CommandName Add-Type -ModuleName devsetup.core.sqlite -MockWith {}
 
-            $Connection = New-SQLiteConnection -DataSource :MEMORY:
+            $connection = New-SQLiteConnection -DataSource :MEMORY:
             try {
-                $First = Invoke-SQLiteQuery -SQLiteConnection $Connection -Query 'SELECT NULL AS NullableValue' -ErrorAction Stop
-                $Second = Invoke-SQLiteQuery -SQLiteConnection $Connection -Query 'SELECT 1 AS Value' -ErrorAction Stop
+                $first = Invoke-SQLiteQuery -SQLiteConnection $connection -Query 'SELECT NULL AS NullableValue' -ErrorAction Stop
+                $second = Invoke-SQLiteQuery -SQLiteConnection $connection -Query 'SELECT 1 AS Value' -ErrorAction Stop
 
-                @($First).Count | Should Be 1
-                $First.NullableValue | Should BeNullOrEmpty
-                $Second.Value | Should Be 1
-                Assert-MockCalled -CommandName Add-Type -ModuleName devsetup.core.sqlite -Times 0 -Exactly
-            }
-            finally {
-                $Connection.Dispose()
+                @($first).Count | Should -Be 1
+                $first.NullableValue | Should -BeNullOrEmpty
+                $second.Value | Should -Be 1
+                Should -Invoke -CommandName Add-Type -ModuleName devsetup.core.sqlite -Times 0 -Exactly
+            } finally {
+                $connection.Dispose()
             }
         }
 
-        It 'should parse offset timestamps using invariant UTC defaults' {
-            $DateTimeSQLiteFile = Join-Path $PSScriptRoot 'DateTime.Working.SQLite'
-            Remove-Item $DateTimeSQLiteFile -Force -ErrorAction SilentlyContinue
+        It 'parses offset timestamps using invariant UTC defaults' {
+            $dateTimeSQLiteFile = Join-Path $TestDrive 'DateTime.Working.SQLite'
 
-            try {
-                Invoke-SQLiteQuery -DataSource $DateTimeSQLiteFile -Query 'CREATE TABLE Events (OccurredAt DATETIME)' -ErrorAction Stop
-                Invoke-SQLiteQuery -DataSource $DateTimeSQLiteFile -Query @'
+            Invoke-SQLiteQuery -DataSource $dateTimeSQLiteFile -Query 'CREATE TABLE Events (OccurredAt DATETIME)' -ErrorAction Stop
+            Invoke-SQLiteQuery -DataSource $dateTimeSQLiteFile -Query @'
 INSERT INTO Events (OccurredAt) VALUES ('2019-07-02 04:59:18.578 +00:00');
 INSERT INTO Events (OccurredAt) VALUES ('2019-07-02T05:59:18.578Z');
 INSERT INTO Events (OccurredAt) VALUES ('2019-07-02 04:59:18.578 -05:00');
 '@ -ErrorAction Stop
 
-                $Out = @(Invoke-SQLiteQuery -DataSource $DateTimeSQLiteFile -Query 'SELECT OccurredAt FROM Events ORDER BY rowid' -ErrorAction Stop)
+            $output = @(Invoke-SQLiteQuery -DataSource $dateTimeSQLiteFile -Query 'SELECT OccurredAt FROM Events ORDER BY rowid' -ErrorAction Stop)
 
-                $Out.Count | Should Be 3
-                $Out[0].OccurredAt.ToString('yyyy-MM-ddTHH:mm:ss.fff') | Should Be '2019-07-02T04:59:18.578'
-                $Out[1].OccurredAt.ToString('yyyy-MM-ddTHH:mm:ss.fff') | Should Be '2019-07-02T05:59:18.578'
-                $Out[2].OccurredAt.ToString('yyyy-MM-ddTHH:mm:ss.fff') | Should Be '2019-07-02T09:59:18.578'
+            $output.Count | Should -Be 3
+            $output[0].OccurredAt.ToString('yyyy-MM-ddTHH:mm:ss.fff') | Should -Be '2019-07-02T04:59:18.578'
+            $output[1].OccurredAt.ToString('yyyy-MM-ddTHH:mm:ss.fff') | Should -Be '2019-07-02T05:59:18.578'
+            $output[2].OccurredAt.ToString('yyyy-MM-ddTHH:mm:ss.fff') | Should -Be '2019-07-02T09:59:18.578'
 
-                Invoke-SQLiteQuery -DataSource $DateTimeSQLiteFile -Query 'CREATE TABLE CustomEvents (OccurredAt DATETIME)' -ErrorAction Stop
-                Invoke-SQLiteQuery -DataSource $DateTimeSQLiteFile -Query "INSERT INTO CustomEvents VALUES ('20190702-045918')" -ErrorAction Stop
+            Invoke-SQLiteQuery -DataSource $dateTimeSQLiteFile -Query 'CREATE TABLE CustomEvents (OccurredAt DATETIME)' -ErrorAction Stop
+            Invoke-SQLiteQuery -DataSource $dateTimeSQLiteFile -Query "INSERT INTO CustomEvents VALUES ('20190702-045918')" -ErrorAction Stop
 
-                $CustomOut = Invoke-SQLiteQuery -DataSource $DateTimeSQLiteFile `
-                    -Query 'SELECT OccurredAt FROM CustomEvents' `
-                    -DateTimeFormatString 'yyyyMMdd-HHmmss' `
-                    -ErrorAction Stop
+            $customOutput = Invoke-SQLiteQuery -DataSource $dateTimeSQLiteFile `
+                -Query 'SELECT OccurredAt FROM CustomEvents' `
+                -DateTimeFormatString 'yyyyMMdd-HHmmss' `
+                -ErrorAction Stop
 
-                $CustomOut.OccurredAt.ToString('yyyyMMdd-HHmmss') | Should Be '20190702-045918'
-            }
-            finally {
-                Remove-Item $DateTimeSQLiteFile -Force -ErrorAction SilentlyContinue
-            }
+            $customOutput.OccurredAt.ToString('yyyyMMdd-HHmmss') | Should -Be '20190702-045918'
         }
 
-        It 'should support parameterized queries' {
-            
-            $Out = @( Invoke-SQLiteQuery @Verbose -Database $SQLiteFile -Query "SELECT * FROM NAMES WHERE BirthDate >= @Date" -SqlParameters @{
-                Date = (Get-Date 3/13/2012)
-            } -ErrorAction Stop )
-            $Out.count | Should Be 1
-            $Out[0].fullname | Should Be "Cookie Monster"
+        It 'supports parameterized queries' {
+            $output = @(Invoke-SQLiteQuery @script:VerboseParameters -Database $script:SQLiteFile -Query 'SELECT * FROM NAMES WHERE BirthDate >= @Date' -SqlParameters @{
+                Date = Get-Date '2012-03-13'
+            } -ErrorAction Stop)
+            $output.Count | Should -Be 1
+            $output[0].fullname | Should -Be 'Cookie Monster'
 
-            $Out = @( Invoke-SQLiteQuery @Verbose -Database $SQLiteFile -Query "SELECT * FROM NAMES WHERE BirthDate >= @Date" -SqlParameters @{
-                Date = (Get-Date 3/15/2012)
-            } -ErrorAction Stop )
-            $Out.count | Should Be 0
+            $output = @(Invoke-SQLiteQuery @script:VerboseParameters -Database $script:SQLiteFile -Query 'SELECT * FROM NAMES WHERE BirthDate >= @Date' -SqlParameters @{
+                Date = Get-Date '2012-03-15'
+            } -ErrorAction Stop)
+            $output.Count | Should -Be 0
         }
 
-        It 'should use existing SQLiteConnections' {
-            Invoke-SqliteQuery @Verbose -SQLiteConnection $Script:Connection -Query "CREATE TABLE OrdersToNames (OrderID INT PRIMARY KEY, fullname TEXT);"
-            Invoke-SqliteQuery @Verbose -SQLiteConnection $Script:Connection -Query "INSERT INTO OrdersToNames (OrderID, fullname) VALUES (1,'Cookie Monster');"
-            @( Invoke-SqliteQuery @Verbose -SQLiteConnection $Script:Connection -Query "SELECT name AS [table] FROM sqlite_master WHERE type = 'table' AND name = 'OrdersToNames'" ) |
-                Select -first 1 -ExpandProperty table |
-                Should be 'OrdersToNames'
-
-            $Script:COnnection.State | Should Be Open
-
-            $Script:Connection.close()
-        }
-
-        It 'should respect PowerShell expectations for null' {
-            
-            #The SQL folks out there might be annoyed by this, but we want to treat DBNulls as null to allow expected PowerShell operator behavior.
-
-            $Connection = New-SQLiteConnection -DataSource :MEMORY: 
+        It 'uses existing SQLite connections without closing them' {
+            $connection = New-SQLiteConnection -DataSource :MEMORY:
             try {
-                Invoke-SqliteQuery @Verbose -SQLiteConnection $Connection -Query "CREATE TABLE OrdersToNames (OrderID INT PRIMARY KEY, fullname TEXT);"
-                Invoke-SqliteQuery @Verbose -SQLiteConnection $Connection -Query "INSERT INTO OrdersToNames (OrderID, fullname) VALUES (1,'Cookie Monster');"
-                Invoke-SqliteQuery @Verbose -SQLiteConnection $Connection -Query "INSERT INTO OrdersToNames (OrderID) VALUES (2);"
+                Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query 'CREATE TABLE OrdersToNames (OrderID INT PRIMARY KEY, fullname TEXT);'
+                Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query "INSERT INTO OrdersToNames (OrderID, fullname) VALUES (1,'Cookie Monster');"
+                @(Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query "SELECT name AS [table] FROM sqlite_master WHERE type = 'table' AND name = 'OrdersToNames'") |
+                    Select-Object -First 1 -ExpandProperty table |
+                    Should -Be 'OrdersToNames'
 
-                @( Invoke-SqliteQuery @Verbose -SQLiteConnection $Connection -Query "SELECT * FROM OrdersToNames" -As DataRow | Where{$_.fullname}).count |
-                    Should Be 2
-
-                @( Invoke-SqliteQuery @Verbose -SQLiteConnection $Connection -Query "SELECT * FROM OrdersToNames" | Where{$_.fullname} ).count |
-                    Should Be 1
-            }
-            finally {
-                $Connection.Dispose()
+                $connection.State | Should -Be Open
+            } finally {
+                $connection.Dispose()
             }
         }
-    }
-}
 
-Describe "ConvertTo-SqliteDataTable PS$PSVersion" {
+        It 'uses PowerShell null semantics for PSObject output' {
+            $connection = New-SQLiteConnection -DataSource :MEMORY:
+            try {
+                Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query 'CREATE TABLE OrdersToNames (OrderID INT PRIMARY KEY, fullname TEXT);'
+                Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query "INSERT INTO OrdersToNames (OrderID, fullname) VALUES (1,'Cookie Monster');"
+                Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query 'INSERT INTO OrdersToNames (OrderID) VALUES (2);'
 
-    Context 'Strict mode' { 
-
-        Set-StrictMode -Version latest
-
-        It 'should create a DataTable' {
-            
-            $Script:DataTable = 1..1000 | %{
-                New-Object -TypeName PSObject -property @{
-                    fullname = "Name $_"
-                    surname = "Name"
-                    givenname = "$_"
-                    BirthDate = (Get-Date).Adddays(-$_)
-                } | Select fullname, surname, givenname, birthdate
-            } | ConvertTo-SqliteDataTable @Verbose
-
-            $Script:DataTable.GetType().Fullname | Should Be 'System.Data.DataTable'
-            @($Script:DataTable.Rows).Count | Should Be 1000
-            $Columns = $Script:DataTable.Columns | Select -ExpandProperty ColumnName
-            $Columns[0] | Should Be 'fullname'
-            $Columns[3] | Should Be 'BirthDate'
-            $Script:DataTable.columns[3].datatype.fullname | Should Be 'System.DateTime'
-            
+                @(Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query 'SELECT * FROM OrdersToNames' -As DataRow | Where-Object fullname).Count |
+                    Should -Be 2
+                @(Invoke-SqliteQuery @script:VerboseParameters -SQLiteConnection $connection -Query 'SELECT * FROM OrdersToNames' | Where-Object fullname).Count |
+                    Should -Be 1
+            } finally {
+                $connection.Dispose()
+            }
         }
     }
 }
 
-Describe "Invoke-SQLiteBulkCopy PS$PSVersion" {
+Describe "ConvertTo-SqliteDataTable PS$script:PSVersion" {
+    It 'creates a typed DataTable' {
+        $dataTable = & $script:NewTestDataTable
 
-    Context 'Strict mode' { 
-
-        Set-StrictMode -Version latest
-
-        It 'should insert data' {
-            Invoke-SQLiteBulkCopy @Verbose -DataTable $Script:DataTable -DataSource $SQLiteFile -Table Names -NotifyAfter 100 -force
-            
-            @( Invoke-SQLiteQuery @Verbose -Database $SQLiteFile -Query "SELECT fullname FROM NAMES WHERE surname = 'Name'" ).count | Should Be 1000
-        }
-        It "should adhere to ConflictCause" {
-            
-            #Basic set of tests, need more...
-
-            #Try adding same data
-            { Invoke-SQLiteBulkCopy @Verbose -DataTable $Script:DataTable -DataSource $SQLiteFile -Table Names -NotifyAfter 100 -force } | Should Throw
-            
-            #Change a known row's prop we can test to ensure it does or does not change
-            $Script:DataTable.Rows[0].surname = "Name 1"
-            { Invoke-SQLiteBulkCopy @Verbose -DataTable $Script:DataTable -DataSource $SQLiteFile -Table Names -NotifyAfter 100 -force } | Should Throw
-
-            $Result = @( Invoke-SQLiteQuery @Verbose -Database $SQLiteFile -Query "SELECT surname FROM NAMES WHERE fullname = 'Name 1'")
-            $Result[0].surname | Should Be 'Name'
-
-            { Invoke-SQLiteBulkCopy @Verbose -DataTable $Script:DataTable -DataSource $SQLiteFile -Table Names -NotifyAfter 100 -ConflictClause Rollback -Force } | Should Throw
-            
-            $Result = @( Invoke-SQLiteQuery @Verbose -Database $SQLiteFile -Query "SELECT surname FROM NAMES WHERE fullname = 'Name 1'")
-            $Result[0].surname | Should Be 'Name'
-
-            Invoke-SQLiteBulkCopy @Verbose -DataTable $Script:DataTable -DataSource $SQLiteFile -Table Names -NotifyAfter 100 -ConflictClause Replace -Force
-
-            $Result = @( Invoke-SQLiteQuery @Verbose -Database $SQLiteFile -Query "SELECT surname FROM NAMES WHERE fullname = 'Name 1'")
-            $Result[0].surname | Should Be 'Name 1'
-
-
-        }
+        $dataTable.GetType().FullName | Should -Be 'System.Data.DataTable'
+        @($dataTable.Rows).Count | Should -Be 1000
+        $columns = $dataTable.Columns | Select-Object -ExpandProperty ColumnName
+        $columns[0] | Should -Be 'fullname'
+        $columns[3] | Should -Be 'BirthDate'
+        $dataTable.Columns[3].DataType.FullName | Should -Be 'System.DateTime'
     }
 }
 
-Remove-Item $SQLiteFile -force -ErrorAction SilentlyContinue
+Describe "Invoke-SQLiteBulkCopy PS$script:PSVersion" {
+    BeforeAll {
+        $script:BulkDataTable = & $script:NewTestDataTable
+        Invoke-SQLiteBulkCopy @script:VerboseParameters -DataTable $script:BulkDataTable -DataSource $script:SQLiteFile -Table Names -NotifyAfter 100 -Force
+    }
+
+    It 'inserts data' {
+        @(Invoke-SQLiteQuery @script:VerboseParameters -Database $script:SQLiteFile -Query "SELECT fullname FROM NAMES WHERE surname = 'Name'").Count |
+            Should -Be 1000
+    }
+
+    It 'honors conflict clauses' {
+        { Invoke-SQLiteBulkCopy @script:VerboseParameters -DataTable $script:BulkDataTable -DataSource $script:SQLiteFile -Table Names -NotifyAfter 100 -Force } |
+            Should -Throw
+
+        $script:BulkDataTable.Rows[0].surname = 'Name 1'
+        { Invoke-SQLiteBulkCopy @script:VerboseParameters -DataTable $script:BulkDataTable -DataSource $script:SQLiteFile -Table Names -NotifyAfter 100 -Force } |
+            Should -Throw
+
+        $result = @(Invoke-SQLiteQuery @script:VerboseParameters -Database $script:SQLiteFile -Query "SELECT surname FROM NAMES WHERE fullname = 'Name 1'")
+        $result[0].surname | Should -Be 'Name'
+
+        { Invoke-SQLiteBulkCopy @script:VerboseParameters -DataTable $script:BulkDataTable -DataSource $script:SQLiteFile -Table Names -NotifyAfter 100 -ConflictClause Rollback -Force } |
+            Should -Throw
+
+        $result = @(Invoke-SQLiteQuery @script:VerboseParameters -Database $script:SQLiteFile -Query "SELECT surname FROM NAMES WHERE fullname = 'Name 1'")
+        $result[0].surname | Should -Be 'Name'
+
+        Invoke-SQLiteBulkCopy @script:VerboseParameters -DataTable $script:BulkDataTable -DataSource $script:SQLiteFile -Table Names -NotifyAfter 100 -ConflictClause Replace -Force
+
+        $result = @(Invoke-SQLiteQuery @script:VerboseParameters -Database $script:SQLiteFile -Query "SELECT surname FROM NAMES WHERE fullname = 'Name 1'")
+        $result[0].surname | Should -Be 'Name 1'
+    }
+}
