@@ -13,6 +13,7 @@ BeforeAll {
     $allTextFiles      = Get-TextFilesList $projectRoot
     $unicodeFilesCount = 0
     $totalTabsCount    = 0
+    $trailingWhitespaceCount = 0
     foreach ($textFile in $allTextFiles) {
         if (Test-FileUnicode $textFile) {
             $unicodeFilesCount++
@@ -32,6 +33,15 @@ BeforeAll {
             )
             $totalTabsCount++
         }
+
+        $lineNumber = 0
+        foreach ($line in [System.IO.File]::ReadAllLines($fileName)) {
+            $lineNumber++
+            if ($line -match '[\t ]+$') {
+                Write-Warning "Trailing whitespace found in ${fileName}:$lineNumber."
+                $trailingWhitespaceCount++
+            }
+        }
     }
 }
 
@@ -45,6 +55,12 @@ Describe 'Text files formatting' {
     Context 'Indentations' {
         It "No text file use tabs for indentations" {
             $totalTabsCount | Should -Be 0
+        }
+    }
+
+    Context 'Trailing whitespace' {
+        It 'No text file has trailing spaces or tabs' {
+            $trailingWhitespaceCount | Should -Be 0
         }
     }
 }

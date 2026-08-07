@@ -1,17 +1,17 @@
-﻿function Invoke-SqliteQuery {  
-    <# 
-    .SYNOPSIS 
+﻿function Invoke-SqliteQuery {
+    <#
+    .SYNOPSIS
         Runs a SQL script against a SQLite database.
 
-    .DESCRIPTION 
+    .DESCRIPTION
         Runs a SQL script against a SQLite database.
 
-        Paramaterized queries are supported. 
+        Paramaterized queries are supported.
 
         Help details below borrowed from Invoke-Sqlcmd, may be inaccurate here.
 
     .PARAMETER DataSource
-        Path to one or more SQLite data sources to query 
+        Path to one or more SQLite data sources to query
 
     .PARAMETER Query
         Specifies a query to be run.
@@ -23,7 +23,7 @@
         Specifies the number of seconds before the queries time out.
 
     .PARAMETER As
-        Specifies output type - DataSet, DataTable, array of DataRow, PSObject or Single Value 
+        Specifies output type - DataSet, DataTable, array of DataRow, PSObject or Single Value
 
         PSObject output introduces overhead but adds flexibility for working with results: http://powershell.org/wp/forums/topic/dealing-with-dbnull/
 
@@ -59,8 +59,8 @@
         An optional exact .NET DateTime format string for databases with a fixed timestamp
         representation. This parameter is available with the DataSource parameter sets.
 
-    .INPUTS 
-        DataSource 
+    .INPUTS
+        DataSource
             You can pipe DataSource paths to Invoke-SQLiteQuery.  The query will execute against each Data Source.
 
     .OUTPUTS
@@ -94,7 +94,7 @@
 
     .LINK
         https://github.com/pwshdevs/devsetup.core.sqlite
-    
+
     .LINK
         https://www.sqlite.org/datatype3.html
 
@@ -141,7 +141,7 @@
         })]
         [string[]]
         $DataSource,
-    
+
         [Parameter( ParameterSetName='Src-Que',
                     Position=1,
                     Mandatory=$true,
@@ -154,7 +154,7 @@
                     ValueFromRemainingArguments=$false )]
         [string]
         $Query,
-        
+
         [Parameter( ParameterSetName='Src-Fil',
                     Position=1,
                     Mandatory=$true,
@@ -175,7 +175,7 @@
                     ValueFromRemainingArguments=$false )]
         [Int32]
         $QueryTimeout=600,
-    
+
         [Parameter( Position=3,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
@@ -183,7 +183,7 @@
         [ValidateSet("DataSet", "DataTable", "DataRow","PSObject","SingleValue")]
         [string]
         $As="PSObject",
-    
+
         [Parameter( Position=4,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
@@ -250,7 +250,7 @@
         [Alias( 'Connection', 'Conn' )]
         [System.Data.SQLite.SQLiteConnection]
         $SQLiteConnection
-    ) 
+    )
 
     Begin
     {
@@ -267,9 +267,9 @@
                 }
             }
 
-        if ($PSBoundParameters.ContainsKey('InputFile')) 
-        { 
-            $filePath = $(Resolve-Path $InputFile).path 
+        if ($PSBoundParameters.ContainsKey('InputFile'))
+        {
+            $filePath = $(Resolve-Path $InputFile).path
             $Query =  [System.IO.File]::ReadAllText("$filePath")
             Write-Verbose "Extracted query from [$InputFile]"
         }
@@ -318,15 +318,15 @@
                 # Resolve the path entered for the database to a proper path name.
                 # This accounts for a variaty of possible ways to provide a path, but
                 # in the end the connection string needs a fully qualified file path.
-                if ($DB -match ":MEMORY:") 
+                if ($DB -match ":MEMORY:")
                 {
                     $Database = $DB
                 }
-                else 
+                else
                 {
-                    $Database = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DB)    
+                    $Database = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DB)
                 }
-                
+
                 if(Test-Path $Database)
                 {
                     Write-Verbose "Querying existing Data Source '$Database'"
@@ -377,16 +377,16 @@
                         }
                     } > $null
             }
-    
-            $ds = New-Object system.Data.DataSet 
+
+            $ds = New-Object system.Data.DataSet
             $da = New-Object System.Data.SQLite.SQLiteDataAdapter($cmd)
-    
+
             Try
             {
                 [void]$da.fill($ds)
             }
             Catch
-            { 
+            {
                 $Err = $_
                 switch ($ErrorActionPreference.tostring())
                 {
@@ -431,16 +431,16 @@
                 }
             }
 
-            switch ($As) 
-            { 
-                'DataSet' 
+            switch ($As)
+            {
+                'DataSet'
                 {
                     $ds
-                } 
+                }
                 'DataTable'
                 {
                     $ds.Tables
-                } 
+                }
                 'DataRow'
                 {
                     $ds.Tables[0]

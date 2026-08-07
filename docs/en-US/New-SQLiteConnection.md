@@ -33,7 +33,7 @@ Connects to C:\NAMES.SQLite and invokes a query against it.
 
 ### EXAMPLE 2
 ```
-$Connection = New-SQLiteConnection -DataSource :MEMORY: 
+$Connection = New-SQLiteConnection -DataSource :MEMORY:
 Invoke-SqliteQuery -SQLiteConnection $Connection -Query "CREATE TABLE OrdersToNames (OrderID INT PRIMARY KEY, fullname TEXT);"
 Invoke-SqliteQuery -SQLiteConnection $Connection -Query "INSERT INTO OrdersToNames (OrderID, fullname) VALUES (1,'Cookie Monster');"
 Invoke-SqliteQuery -SQLiteConnection $Connection -Query "PRAGMA STATS"
@@ -69,7 +69,7 @@ Accept wildcard characters: False
 
 ### -Password
 Specifies A Secure String password to use in the SQLite connection string.
-        
+
 SECURITY NOTE: If you use the -Debug switch, the connectionstring including plain text password will be sent to the debug stream.
 
 ```yaml
@@ -154,7 +154,7 @@ Accept wildcard characters: False
 ```
 
 ### -Open
-We open the connection by default. 
+We open the connection by default.
 You can use this parameter to create a connection without opening it.
 
 ```yaml

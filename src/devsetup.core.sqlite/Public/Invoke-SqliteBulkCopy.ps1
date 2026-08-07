@@ -5,7 +5,7 @@ function Invoke-SQLiteBulkCopy {
 
 .DESCRIPTION
     Use a SQLite transaction to quickly insert data.  If we run into any errors, we roll back the transaction.
-    
+
     The data source is not limited to SQL Server; any data source can be used, as long as the data can be loaded to a DataTable instance or read with a IDataReader instance.
 
 .PARAMETER DataTable
@@ -39,7 +39,7 @@ function Invoke-SQLiteBulkCopy {
     Invoke-SQLiteBulkCopy -DataTable $dataTable -DataSource C:\Processes.sqlite -Table Processes -Force
 
     Inserts process data into the Processes table within a single transaction.
-        
+
 .INPUTS
     System.Data.DataTable
 
@@ -128,13 +128,13 @@ function Invoke-SQLiteBulkCopy {
     #Connections
         if($PSBoundParameters.Keys -notcontains "SQLiteConnection")
         {
-            if ($DataSource -match ':MEMORY:') 
+            if ($DataSource -match ':MEMORY:')
             {
                 $Database = $DataSource
             }
-            else 
+            else
             {
-                $Database = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DataSource)    
+                $Database = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DataSource)
             }
 
             $ConnectionString = "Data Source={0}" -f $Database
@@ -157,7 +157,7 @@ function Invoke-SQLiteBulkCopy {
         {
             Throw $_
         }
-    
+
     write-verbose "DATATABLE IS $($DataTable.gettype().fullname) with value $($Datatable | out-string)"
     $RowCount = $Datatable.Rows.Count
     Write-Verbose "Processing datatable with $RowCount rows"
@@ -219,7 +219,7 @@ function Invoke-SQLiteBulkCopy {
                 $param = New-Object System.Data.SQLite.SqLiteParameter $ColumnToParamHash[$Column]
                 [void]$Command.Parameters.Add($param)
             }
-            
+
             for ($RowNumber = 0; $RowNumber -lt $RowCount; $RowNumber++)
             {
                 $row = $Datatable.Rows[$RowNumber]
@@ -273,9 +273,9 @@ function Invoke-SQLiteBulkCopy {
                 {
                     Write-Verbose "Processed $($RowNumber + 1) records"
                 }
-            }  
+            }
     }
-    
+
     #Commit the transaction and clean up the connection
         try
         {
@@ -285,5 +285,5 @@ function Invoke-SQLiteBulkCopy {
         {
             Close-SqliteBulkCopyResource -Connection $SQLiteConnection -Command $Command -Transaction $Transaction -BoundParameters $PSBoundParameters
         }
-    
+
 }

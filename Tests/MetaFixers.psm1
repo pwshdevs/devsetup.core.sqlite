@@ -44,12 +44,18 @@ function Get-TextFilesList {
     )
 
     begin {
-        $txtFileExtentions = @('.gitignore', '.gitattributes', '.ps1', '.psm1', '.psd1', '.json', '.xml', '.cmd', '.mof')
+        $textFileExtensions = @(
+            '.cmd', '.cs', '.csproj', '.json', '.md', '.mof', '.ps1', '.psd1',
+            '.psm1', '.sql', '.xml', '.yaml', '.yml'
+        )
+        $textFileNames = @('.gitattributes', '.gitignore', 'LICENSE')
     }
 
     process {
         Get-ChildItem -Path $Root -File -Recurse |
-            Where-Object { $_.Extension -in $txtFileExtentions }
+            Where-Object {
+                $_.Extension -in $textFileExtensions -or $_.Name -in $textFileNames
+            }
     }
 }
 

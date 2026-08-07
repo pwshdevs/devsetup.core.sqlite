@@ -64,31 +64,31 @@
 
     Begin
     {
-        $dt = New-Object Data.datatable  
-        $First = $true 
+        $dt = New-Object Data.datatable
+        $First = $true
     }
     Process
     {
         foreach ($Object in $InputObject)
         {
-            $DR = $DT.NewRow()  
+            $DR = $DT.NewRow()
             foreach ($Property in $Object.PsObject.Properties)
             {
                 $Name = $Property.Name
                 $Value = $Property.Value
-                
+
                 #RCM: what if the first property is not reflective of all the properties?  Unlikely, but...
                 if ($First)
                 {
-                    $Col = New-Object Data.DataColumn  
-                    $Col.ColumnName = $Name  
-                    
+                    $Col = New-Object Data.DataColumn
+                    $Col.ColumnName = $Name
+
                     #If it's not DBNull or Null, get the type
                     if ($Value -isnot [System.DBNull] -and $Value -ne $null)
                     {
                         $Col.DataType = [System.Type]::GetType( $(Get-SqliteDataColumnType $property.TypeNameOfValue) )
                     }
-                    
+
                     #Set it to nonnullable if specified
                     if ($NonNullable -contains $Name )
                     {
@@ -103,8 +103,8 @@
                     {
                         Write-Error "Could not add column $($Col | Out-String) for property '$Name' with value '$Value' and type '$($Value.GetType().FullName)':`n$_"
                     }
-                }  
-                
+                }
+
                 Try
                 {
                     #Handle arrays and nulls
@@ -133,7 +133,7 @@
                     write-verbose "NonNullable property '$Name' with null value found: $($object | out-string)"
                 }
 
-            } 
+            }
 
             Try
             {
@@ -146,8 +146,8 @@
 
             $First = $false
         }
-    } 
-     
+    }
+
     End
     {
         Write-Output @(,$dt)

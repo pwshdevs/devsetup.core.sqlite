@@ -45,7 +45,7 @@ Invoke-SqliteQuery [-InputFile] <String> [[-QueryTimeout] <Int32>] [[-As] <Strin
 ## DESCRIPTION
 Runs a SQL script against a SQLite database.
 
-Paramaterized queries are supported. 
+Paramaterized queries are supported.
 
 Help details below borrowed from Invoke-Sqlcmd, may be inaccurate here.
 
@@ -145,7 +145,7 @@ Accept wildcard characters: False
 ```
 
 ### -As
-Specifies output type - DataSet, DataTable, array of DataRow, PSObject or Single Value 
+Specifies output type - DataSet, DataTable, array of DataRow, PSObject or Single Value
 
 PSObject output introduces overhead but adds flexibility for working with results: http://powershell.org/wp/forums/topic/dealing-with-dbnull/
 
@@ -162,7 +162,7 @@ Accept wildcard characters: False
 ```
 
 ### -SqlParameters
-Hashtable of parameters for parameterized SQL queries. 
+Hashtable of parameters for parameterized SQL queries.
 http://blog.codinghorror.com/give-me-parameterized-sql-or-give-me-death/
 
 Limited support for conversions to SQLite friendly formats is supported.
@@ -271,7 +271,7 @@ Accept wildcard characters: False
 ```
 
 ### -SQLiteConnection
-An existing SQLiteConnection to use. 
+An existing SQLiteConnection to use.
 We do not close this connection upon completed query.
 
 ```yaml

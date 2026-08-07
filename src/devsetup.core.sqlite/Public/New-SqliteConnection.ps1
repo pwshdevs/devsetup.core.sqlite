@@ -3,18 +3,18 @@
     <#
     .SYNOPSIS
         Creates a SQLiteConnection to a SQLite data source
-    
+
     .DESCRIPTION
         Creates a SQLiteConnection to a SQLite data source
-    
+
     .PARAMETER DataSource
        SQLite Data Source to connect to.
-    
+
     .PARAMETER Password
         Specifies A Secure String password to use in the SQLite connection string.
-                
+
         SECURITY NOTE: If you use the -Debug switch, the connectionstring including plain text password will be sent to the debug stream.
-    
+
     .PARAMETER ReadOnly
         If specified, open SQLite data source as read only
 
@@ -44,7 +44,7 @@
         Connects to C:\NAMES.SQLite and invokes a query against it.
 
     .EXAMPLE
-        $Connection = New-SQLiteConnection -DataSource :MEMORY: 
+        $Connection = New-SQLiteConnection -DataSource :MEMORY:
         Invoke-SqliteQuery -SQLiteConnection $Connection -Query "CREATE TABLE OrdersToNames (OrderID INT PRIMARY KEY, fullname TEXT);"
         Invoke-SqliteQuery -SQLiteConnection $Connection -Query "INSERT INTO OrdersToNames (OrderID, fullname) VALUES (1,'Cookie Monster');"
         Invoke-SqliteQuery -SQLiteConnection $Connection -Query "PRAGMA STATS"
@@ -78,7 +78,7 @@
         [ValidateNotNullOrEmpty()]
         [string[]]
         $DataSource,
-                
+
         [Parameter( Position=2,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
@@ -123,15 +123,15 @@
     {
         foreach($DataSRC in $DataSource)
         {
-            if ($DataSRC -match ':MEMORY:' ) 
+            if ($DataSRC -match ':MEMORY:' )
             {
                 $Database = $DataSRC
             }
-            else 
+            else
             {
-                $Database = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DataSRC)    
+                $Database = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DataSRC)
             }
-            
+
             Write-Verbose "Querying Data Source '$Database'"
 
             $ConnectionStringBuilder = New-Object System.Data.SQLite.SQLiteConnectionStringBuilder
@@ -144,7 +144,7 @@
                 $ConnectionStringBuilder.DateTimeFormatString = $DateTimeFormatString
             }
 
-            if ($Password) 
+            if ($Password)
             {
                 $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
                 try
@@ -162,7 +162,7 @@
             }
 
             [string]$ConnectionString = $ConnectionStringBuilder.ConnectionString
-        
+
             $conn = New-Object System.Data.SQLite.SQLiteConnection -ArgumentList $ConnectionString
             $conn.ParseViaFramework = $true #Allow UNC paths, thanks to Ray Alex!
             Write-Debug "ConnectionString $ConnectionString"
@@ -171,7 +171,7 @@
             {
                 Try
                 {
-                    $conn.Open() 
+                    $conn.Open()
                 }
                 Catch
                 {

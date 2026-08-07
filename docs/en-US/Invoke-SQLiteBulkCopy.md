@@ -27,7 +27,7 @@ Invoke-SQLiteBulkCopy [-DataTable] <DataTable> [-SQLiteConnection] <SQLiteConnec
 ```
 
 ## DESCRIPTION
-Use a SQLite transaction to quickly insert data. 
+Use a SQLite transaction to quickly insert data.
 If we run into any errors, we roll back the transaction.
 
 The data source is not limited to SQL Server; any data source can be used, as long as the data can be loaded to a DataTable instance or read with a IDataReader instance.
@@ -75,7 +75,7 @@ Accept wildcard characters: False
 ```
 
 ### -SQLiteConnection
-An existing SQLiteConnection to use. 
+An existing SQLiteConnection to use.
 We do not close this connection upon completed query.
 
 ```yaml
@@ -124,8 +124,8 @@ Accept wildcard characters: False
 ```
 
 ### -NotifyAfter
-The number of rows to fire the notification event after transferring. 
-0 means don't notify. 
+The number of rows to fire the notification event after transferring.
+0 means don't notify.
 Notifications hit the verbose stream (use -verbose to see them)
 
 ```yaml
