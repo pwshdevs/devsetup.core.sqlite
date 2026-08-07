@@ -25,4 +25,5 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Renamed Out-DataTable to ConvertTo-SqliteDataTable.
 - Moved the legacy nested DataTable and bulk-copy helpers into documented, individually named private files.
 - Normalized the build-process PATH under WSL and limited Unix script-analysis input to PowerShell files, avoiding slow Windows command discovery and a PSScriptAnalyzer null reference on bundled native runtime trees.
+- Made build-dependency cleanup tolerate manifests that omit the optional `RequiredModules` key under strict mode.
 

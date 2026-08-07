@@ -34,11 +34,29 @@ $manifestCandidates = @(
 )
 if ($manifestCandidates.Count -eq 1) {
     $manifestData = Import-PowerShellDataFile -LiteralPath $manifestCandidates[0]
-    foreach ($requiredModule in @($manifestData.RequiredModules)) {
+    $requiredModules = if ($manifestData.ContainsKey('RequiredModules')) {
+        @($manifestData['RequiredModules'])
+    } else {
+        @()
+    }
+    foreach ($requiredModule in $requiredModules) {
         if ($requiredModule -is [string]) {
             $moduleNames += $requiredModule
-        } elseif ($requiredModule.ModuleName) {
-            $moduleNames += [string]$requiredModule.ModuleName
+        } elseif ($requiredModule -is [System.Collections.IDictionary]) {
+            if ($requiredModule.Contains('ModuleName')) {
+                $requiredModuleName = [string]$requiredModule['ModuleName']
+                if (-not [string]::IsNullOrWhiteSpace($requiredModuleName)) {
+                    $moduleNames += $requiredModuleName
+                }
+            }
+        } else {
+            $moduleNameProperty = $requiredModule.PSObject.Properties['ModuleName']
+            if ($null -ne $moduleNameProperty) {
+                $requiredModuleName = [string]$moduleNameProperty.Value
+                if (-not [string]::IsNullOrWhiteSpace($requiredModuleName)) {
+                    $moduleNames += $requiredModuleName
+                }
+            }
         }
     }
 
