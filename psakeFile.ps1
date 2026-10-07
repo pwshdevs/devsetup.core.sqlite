@@ -1,6 +1,9 @@
 # PowerShellBuild's Analyze task resolves this project-local wrapper at runtime.
 # Keep it in its own correspondingly named file with the rest of the build tools.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'tools/Test-PSBuildScriptAnalysis.ps1')
+# PowerShellBuild 0.8.2 reimports Pester with MinimumVersion, which can select a
+# newer runner-installed assembly after bootstrap has loaded our pinned version.
+. (Join-Path -Path $PSScriptRoot -ChildPath 'tools/Test-PSBuildPester.ps1')
 
 properties {
     # PowerShellBuild's bundled BuildHelpers does not discover manifests at
