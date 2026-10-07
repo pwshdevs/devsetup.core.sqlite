@@ -107,4 +107,6 @@ foreach ($import in @($private + $public)) {
     }
 }
 
-Export-ModuleMember -Function $public.Basename
+# Function is positional parameter 0. Avoid the named parameter here because
+# PSScriptAnalyzer 1.25.0 can crash in CommandInfo.ResolveParameter while analyzing it.
+Export-ModuleMember $public.Basename

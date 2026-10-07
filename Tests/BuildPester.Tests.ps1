@@ -25,6 +25,20 @@ if ((Get-Module Pester).Version.ToString() -ne $requirements.Pester.Version) {
     throw 'The runner did not retain the pinned Pester version.'
 }
 '@
+
+        function Invoke-PinnedTestProcess {
+            param([string]$FixturePath)
+
+            # Windows PowerShell 5.1 treats redirected native stderr as errors.
+            # Capture expected child failures even when the build uses Stop;
+            # this preference change is confined to the helper's function scope.
+            $ErrorActionPreference = 'Continue'
+            $output = & $powerShellPath -NoProfile -File $childScript $runnerPath $requirementsPath $moduleRoot $FixturePath 2>&1
+            [pscustomobject]@{
+                ExitCode = $LASTEXITCODE
+                Output = $output -join [Environment]::NewLine
+            }
+        }
     }
 
     It 'uses the pin when a newer Pester is discoverable' {
@@ -32,8 +46,8 @@ if ((Get-Module Pester).Version.ToString() -ne $requirements.Pester.Version) {
         New-Item -Path $fixture -ItemType Directory | Out-Null
         Set-Content -LiteralPath (Join-Path $fixture 'Example.Tests.ps1') -Value "Describe 'fixture' { It 'passes' { 1 | Should -Be 1 } }"
 
-        $output = & $powerShellPath -NoProfile -File $childScript $runnerPath $requirementsPath $moduleRoot $fixture 2>&1
-        $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
+        $run = Invoke-PinnedTestProcess -FixturePath $fixture
+        $run.ExitCode | Should -Be 0 -Because $run.Output
         [xml]$report = Get-Content -LiteralPath (Join-Path $fixture 'results.xml') -Raw
         $report.'test-results'.failures | Should -Be '0'
         $report.'test-results'.total | Should -Be '1'
@@ -48,8 +62,8 @@ if ((Get-Module Pester).Version.ToString() -ne $requirements.Pester.Version) {
         New-Item -Path $fixture -ItemType Directory | Out-Null
         Set-Content -LiteralPath (Join-Path $fixture 'Example.Tests.ps1') -Value $Body
 
-        $output = & $powerShellPath -NoProfile -File $childScript $runnerPath $requirementsPath $moduleRoot $fixture 2>&1
-        $LASTEXITCODE | Should -Not -Be 0
-        ($output -join [Environment]::NewLine) | Should -Match 'Pester run failed'
+        $run = Invoke-PinnedTestProcess -FixturePath $fixture
+        $run.ExitCode | Should -Not -Be 0
+        $run.Output | Should -Match 'Pester run failed'
     }
 }
