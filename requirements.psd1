@@ -19,6 +19,9 @@
     }
     'PowerShellBuild' = @{
         Version = '0.8.2'
+        # Import the pinned Pester before PowerShellBuild can load another version
+        # through RequiredModules. Pester assemblies cannot be replaced in-session.
+        DependsOn = 'Pester'
     }
     'PSDependencyCanary' = @{
         Version = '1.0.0'
