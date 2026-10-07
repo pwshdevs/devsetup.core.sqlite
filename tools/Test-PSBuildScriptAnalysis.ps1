@@ -5,8 +5,8 @@ function Test-PSBuildScriptAnalysis {
     .DESCRIPTION
         Delegates to PowerShellBuild's Test-PSBuildScriptAnalysis command on Windows.
         On Linux and macOS, enumerates and analyzes each PowerShell source file without
-        recursion. This avoids a PSScriptAnalyzer 1.25.0 null-reference failure caused
-        by recursively analyzing a staged module that contains native runtime trees.
+        recursion, limiting analysis to PowerShell sources in the staged module.
+        Bundled binaries and other runtime assets are not passed to the analyzer.
     .PARAMETER Path
         Path to the staged PowerShell module.
     .PARAMETER SeverityThreshold
@@ -14,7 +14,7 @@ function Test-PSBuildScriptAnalysis {
     .PARAMETER SettingsPath
         Path to the PSScriptAnalyzer settings file.
     .EXAMPLE
-        Test-PSBuildScriptAnalysis -Path ./Output/devsetup.core.sqlite/1.0.0 -SeverityThreshold Error
+        Test-PSBuildScriptAnalysis -Path ./Output/devsetup.core.sqlite/1.1.0 -SeverityThreshold Error
 
         Analyzes the staged module and fails when an error-level diagnostic is found.
     #>

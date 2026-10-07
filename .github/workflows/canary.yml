@@ -1,229 +1,115 @@
-name: Maintenance canary
+name: Dependency canary
 
 on:
   schedule:
     - cron: '17 7 * * 1'
   workflow_dispatch:
-    inputs:
-      proposed_version:
-        description: Optional module version for the canary PR (for example, 0.7.0)
-        required: false
-        type: string
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: dependency-canary
   cancel-in-progress: true
 
 jobs:
-  resolve:
-    name: Resolve maintenance candidates
+  canary:
     runs-on: windows-latest
-    outputs:
-      changed: ${{ steps.resolve.outputs.changed }}
-      version: ${{ steps.resolve.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Remove preinstalled build dependencies
-        shell: pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        run: ./tools/Remove-BuildDependencies.ps1
-
-      - name: Resolve dependencies, refresh SQLite assets, and create candidate
-        id: resolve
-        shell: pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        env:
-          PROPOSED_VERSION: ${{ inputs.proposed_version }}
-        run: |
-          $parameters = @{}
-          if (-not [string]::IsNullOrWhiteSpace($env:PROPOSED_VERSION)) {
-              $parameters.ProposedVersion = [version]$env:PROPOSED_VERSION
-          }
-
-          $result = ./tools/Update-DependencyPins.ps1 @parameters
-          "changed=$($result.Changed.ToString().ToLowerInvariant())" |
-              Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "version=$($result.ProposedVersion)" |
-              Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-          git diff --check
-          if ($LASTEXITCODE -ne 0) {
-              throw 'The dependency candidate contains whitespace errors.'
-          }
-
-          $patchPath = Join-Path $env:RUNNER_TEMP 'dependency-canary.patch'
-          git diff --binary "--output=$patchPath"
-          if ($LASTEXITCODE -ne 0) {
-              throw 'Unable to create the dependency candidate patch.'
-          }
-
-          $result |
-              ConvertTo-Json -Depth 5 |
-              Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'dependency-canary.json') -Encoding utf8
-
-          if (-not $result.Changed) {
-              @(
-                  '### Dependency canary'
-                  ''
-                  'Build dependencies and bundled SQLite runtimes already match the latest stable versions. No validation or pull request is required.'
-              ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
-          }
-
-      - name: Upload exact dependency candidate
-        if: steps.resolve.outputs.changed == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: dependency-canary
-          path: |
-            ${{ runner.temp }}/dependency-canary.patch
-            ${{ runner.temp }}/dependency-canary.json
-          if-no-files-found: error
-
-  validate:
-    name: Validate (${{ matrix.name }})
-    needs: resolve
-    if: needs.resolve.outputs.changed == 'true'
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: PowerShell 7
-            edition: powershell-7
-          - name: Windows PowerShell 5.1
-            edition: windows-powershell
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Download exact dependency candidate
-        uses: actions/download-artifact@v8
-        with:
-          name: dependency-canary
-          path: ${{ runner.temp }}/dependency-canary
-
-      - name: Apply dependency candidate
-        shell: pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        run: |
-          $patchPath = Join-Path $env:RUNNER_TEMP 'dependency-canary/dependency-canary.patch'
-          if ((Get-Item -LiteralPath $patchPath).Length -gt 0) {
-              git apply --check $patchPath
-              git apply $patchPath
-          }
-
-      - name: Validate with PowerShell 7
-        if: matrix.edition == 'powershell-7'
-        shell: pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        run: |
-          ./tools/Remove-BuildDependencies.ps1
-          ./tools/Test-DependencyCanary.ps1
-          ./tools/Test-SqliteRuntimeUpdater.ps1
-
-      - name: Validate with Windows PowerShell 5.1
-        if: matrix.edition == 'windows-powershell'
-        shell: powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        run: |
-          ./tools/Remove-BuildDependencies.ps1
-          ./tools/Test-DependencyCanary.ps1
-
-  promote:
-    name: Open dependency canary PR
-    needs: [resolve, validate]
-    if: needs.resolve.outputs.changed == 'true' && needs.validate.result == 'success'
-    runs-on: windows-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout validated revision
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Download exact dependency candidate
-        uses: actions/download-artifact@v8
-        with:
-          name: dependency-canary
-          path: ${{ runner.temp }}/dependency-canary
-
-      - name: Commit candidate and create or update PR
+      - name: Install Canary and clean the module environment
         shell: pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $minimumCanaryVersion = '1.1.0'
+          Get-PackageProvider -Name NuGet -ForceBootstrap | Out-Null
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name PSDependencyCanary -MinimumVersion $minimumCanaryVersion -Repository PSGallery -Scope CurrentUser -Force
+          $canaryModule = Import-Module -Name PSDependencyCanary -MinimumVersion $minimumCanaryVersion -Force -PassThru
+          PSDependencyCanary\Clear-PSDependencyCanaryEnvironment -ProjectRoot . -Confirm:$false | Out-Host
+          if (Test-Path -LiteralPath $canaryModule.ModuleBase) {
+              throw "The temporary PSDependencyCanary installation was not removed from '$($canaryModule.ModuleBase)'."
+          }
+
+      - name: Bootstrap the committed dependency pins
+        shell: pwsh
+        run: ./build.ps1 -Task Init -Bootstrap
+
+      - name: Baseline-test and validate dependency updates
+        shell: pwsh
+        env:
+          PSDEPENDENCYCANARY_RESULT_PATH: ${{ runner.temp }}/dependency-canary.json
+        run: ./build.ps1 -Task Canary
+
+      - name: Create or update the dependency pull request
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          PROPOSED_VERSION: ${{ needs.resolve.outputs.version }}
+          RESULT_PATH: ${{ runner.temp }}/dependency-canary.json
         run: |
-          $artifactPath = Join-Path $env:RUNNER_TEMP 'dependency-canary'
-          $patchPath = Join-Path $artifactPath 'dependency-canary.patch'
-          $metadataPath = Join-Path $artifactPath 'dependency-canary.json'
-          $branch = "chore/dependency-canary-$env:PROPOSED_VERSION"
-          $title = $branch
+          $ErrorActionPreference = 'Stop'
+          $result = Get-Content -Raw -LiteralPath $env:RESULT_PATH | ConvertFrom-Json
+          if (-not $result.Changed) {
+              'All dependency pins are current.' >> $env:GITHUB_STEP_SUMMARY
+              exit 0
+          }
+          if (-not $result.BaselineTested -or -not $result.Tested -or -not $result.Applied) {
+              throw 'The unchanged project and dependency candidate were not both validated.'
+          }
 
-          git apply --check $patchPath
-          git apply $patchPath
-          git checkout -b $branch
+          $branch = 'chore/dependency-canary'
+          git fetch origin "refs/heads/$branch`:refs/remotes/origin/$branch" 2>$null
+          git checkout -B $branch
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --update
-          git commit -m "chore(deps): validate dependencies for v$env:PROPOSED_VERSION"
-
-          $remoteBranch = @(git ls-remote --heads origin "refs/heads/$branch")
+          $whitespaceWarnings = @(git diff --cached --check 2>&1)
           if ($LASTEXITCODE -ne 0) {
-              throw "Unable to inspect the remote $branch branch."
+              Write-Warning "The validated candidate contains whitespace warnings:`n$($whitespaceWarnings -join "`n")"
+              @(
+                  '### Dependency candidate whitespace warnings'
+                  ''
+                  'The candidate was committed because whitespace findings are informational.'
+                  ''
+                  '```text'
+                  $whitespaceWarnings
+                  '```'
+              ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           }
-          if ($remoteBranch.Count -gt 0) {
-              git fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch"
-              $expectedRemote = git rev-parse "refs/remotes/origin/$branch"
-              git push origin "HEAD:refs/heads/$branch" `
-                  "--force-with-lease=refs/heads/$branch`:$expectedRemote"
-          } else {
-              git push --set-upstream origin "HEAD:refs/heads/$branch"
-          }
-          if ($LASTEXITCODE -ne 0) {
-              throw "Unable to push $branch."
-          }
+          git commit -m 'chore(deps): validate dependency updates'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to commit the dependency candidate.' }
+          git push --force-with-lease --set-upstream origin "HEAD:refs/heads/$branch"
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to push the dependency candidate.' }
 
-          $metadata = Get-Content -Raw -LiteralPath $metadataPath | ConvertFrom-Json
-          $dependencyVersions = @{}
-          foreach ($dependency in $metadata.InitializedDependencies.PSObject.Properties) {
-              $dependencyVersions[$dependency.Name] = $dependency.Value
-          }
-          foreach ($dependency in $metadata.RuntimeDependencies.PSObject.Properties) {
-              $dependencyVersions[$dependency.Name] = $dependency.Value
-          }
-          $dependencyRows = @(
-              $dependencyVersions.GetEnumerator() |
-                  Sort-Object Key |
-                  ForEach-Object { "| $($_.Key) | $($_.Value) |" }
+          $updates = @(
+              $result.Updates |
+                  Sort-Object Type, Name |
+                  ForEach-Object {
+                      "| $($_.Type) | $($_.Name) | $($_.CurrentVersion) | $($_.CandidateVersion) |"
+                  }
           )
           $bodyPath = Join-Path $env:RUNNER_TEMP 'dependency-canary-pr.md'
           @"
-          Automated maintenance canary for module version ``$env:PROPOSED_VERSION``.
+          The unchanged project passed its complete test task. The updated dependency
+          environment was then bootstrapped and passed the same task.
 
-          The exact changes in this PR passed on clean GitHub-hosted Windows runners under:
-
-          - Windows PowerShell 5.1
-          - PowerShell 7
-          - Refreshed System.Data.SQLite and native SQLite assets for every supported runtime
-          - The generated module test suite, when the project exports ``New-LathModule``
-
-          | Dependency | Validated version |
-          | --- | --- |
-          $($dependencyRows -join "`n")
-
-          Merging this PR triggers the normal ``push`` workflow on the default branch. The publishing helper will publish only when ``ModuleVersion`` is newer than PSGallery.
+          | Declaration | Dependency | Previous | Validated |
+          | --- | --- | --- | --- |
+          $($updates -join "`n")
           "@ | Set-Content -LiteralPath $bodyPath -Encoding utf8
 
-          $existingPr = gh pr list --head $branch --state open --json number --jq '.[0].number'
-          if ($existingPr) {
-              gh pr edit $existingPr --title $title --body-file $bodyPath
+          $pullRequest = gh pr list --head $branch --state open --json number --jq '.[0].number'
+          if ($pullRequest) {
+              gh pr edit $pullRequest --title 'chore(deps): validated dependency updates' --body-file $bodyPath
           } else {
               gh pr create `
                   --base '${{ github.event.repository.default_branch }}' `
                   --head $branch `
-                  --title $title `
+                  --title 'chore(deps): validated dependency updates' `
                   --body-file $bodyPath
           }
-

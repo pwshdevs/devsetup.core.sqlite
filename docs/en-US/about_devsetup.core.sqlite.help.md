@@ -12,7 +12,8 @@ devsetup.core.sqlite is a cross-platform PowerShell module built on
 System.Data.SQLite. It bundles managed and native SQLite runtime assets for
 supported Windows, Linux, and macOS architectures.
 
-The module can create reusable SQLite connections, execute parameterized SQL,
+The module can explicitly create persistent databases from structured schemas or SQL,
+create reusable SQLite connections, execute parameterized SQL,
 return several PowerShell and ADO.NET output shapes, manage rows through safe
 high-level commands, and insert DataTable rows inside a transaction.
 
@@ -26,13 +27,21 @@ customized for databases that use fixed or non-standard timestamp formats.
 
 # EXAMPLES
 
-Create a database table and query it:
+Create a database and query it:
 
 ```powershell
 $database = Join-Path $PWD 'example.sqlite'
-Invoke-SqliteQuery -DataSource $database -Query @'
-CREATE TABLE Items (Id INTEGER PRIMARY KEY, Name TEXT);
-'@
+New-SqliteDatabase -Path $database -Schema @{
+    Tables = @(
+        @{
+            Name = 'Items'
+            Columns = @(
+                @{ Name = 'Id'; Type = 'INTEGER'; PrimaryKey = $true }
+                @{ Name = 'Name'; Type = 'TEXT' }
+            )
+        }
+    )
+}
 
 Invoke-SqliteQuery -DataSource $database -Query @'
 INSERT INTO Items (Id, Name) VALUES (@Id, @Name);
@@ -58,6 +67,7 @@ provider materializes stored values.
 # SEE ALSO
 
 - New-SqliteConnection
+- New-SqliteDatabase
 - Add-SqliteRow
 - Get-SqliteRow
 - Invoke-SqliteQuery
@@ -72,4 +82,3 @@ provider materializes stored values.
 - SQL
 - database
 - PowerShell
-

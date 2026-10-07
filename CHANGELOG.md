@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.1.0] Unreleased
+
+### Added
+
+- `New-SqliteDatabase` for explicit, non-overwriting database creation from PowerShell objects, JSON schemas, or SQL, with native scalar defaults and transactional cleanup on failure.
+- Tested minimal and advanced database-creation examples for every structured-schema and SQL input mode.
+
+### Changed
+
+- Replaced the repository-specific dependency pinning, cleanup, and candidate-validation helpers with the shared PSDependencyCanary task and workflow.
+
 ## [1.0.0] 2026-08-06
 
 ### Added

@@ -13,6 +13,7 @@ A cross-platform PowerShell module for querying SQLite databases and efficiently
 ## Features
 
 - Execute SQL from a query string or file.
+- Create persistent databases from PowerShell objects, JSON schemas, or SQL.
 - Read, insert, update, and delete table rows without writing routine SQL.
 - Use parameterized queries and reusable SQLite connections.
 - Return results as PowerShell objects, data rows, data tables, data sets, or scalar values.
@@ -44,13 +45,19 @@ Import-Module devsetup.core.sqlite
 
 $database = Join-Path $PWD 'example.sqlite'
 
-Invoke-SqliteQuery -DataSource $database -Query @'
-CREATE TABLE Items (
-    Id INTEGER PRIMARY KEY,
-    Name TEXT NOT NULL,
-    CreatedAt DATETIME
-);
-'@
+New-SqliteDatabase -Path $database -Schema @{
+    UserVersion = 1
+    Tables = @(
+        @{
+            Name = 'Items'
+            Columns = @(
+                @{ Name = 'Id'; Type = 'INTEGER'; PrimaryKey = $true }
+                @{ Name = 'Name'; Type = 'TEXT'; Nullable = $false }
+                @{ Name = 'CreatedAt'; Type = 'TEXT' }
+            )
+        }
+    )
+}
 
 Invoke-SqliteQuery -DataSource $database -Query @'
 INSERT INTO Items (Id, Name, CreatedAt)
@@ -71,11 +78,60 @@ Add-SqliteRow -DataSource $database -On Items -Data @(
 Get-SqliteRow -DataSource $database -On Items -OrderBy Id -Limit 10
 ```
 
+## Creating databases
+
+`New-SqliteDatabase` never overwrites an existing path, and the parent directory must already exist.
+Schema initialization is transactional; a failure removes the incomplete database and its `-journal`,
+`-wal`, and `-shm` sidecars. Use `-PassThru` when you want the open connection after creation.
+
+`-Schema` accepts the same model as a hashtable, `PSCustomObject`, or JSON text. Native PowerShell
+schemas preserve scalar defaults such as `byte[]`, `DateTime`, and `DateTimeOffset`. `-SchemaPath`
+reads the portable form from a `.json` file. The JSON form looks like this:
+
+```json
+{
+  "userVersion": 1,
+  "tables": [
+    {
+      "name": "Items",
+      "strict": true,
+      "columns": [
+        { "name": "Id", "type": "INTEGER", "primaryKey": true, "autoIncrement": true },
+        { "name": "Name", "type": "TEXT", "nullable": false, "collation": "NOCASE" },
+        { "name": "CreatedAt", "type": "TEXT", "defaultExpression": "CURRENT_TIMESTAMP" }
+      ],
+      "uniqueConstraints": [
+        { "name": "UQ_Items_Name", "columns": ["Name"] }
+      ],
+      "indexes": [
+        { "name": "IX_Items_CreatedAt", "columns": ["CreatedAt"] }
+      ]
+    }
+  ]
+}
+```
+
+At the root, `tables` is required and `userVersion` is optional. A table requires `name` and
+`columns`; it can also define a composite `primaryKey`, `uniqueConstraints`, `foreignKeys`, `indexes`,
+`strict`, and `withoutRowId`. A column requires `name` and `type`; optional settings are `primaryKey`,
+`autoIncrement`, `nullable` (default `$true`), `unique`, `collation`, `default`, and
+`defaultExpression`. Default expressions are limited to SQLite's `CURRENT_TIME`, `CURRENT_DATE`, and
+`CURRENT_TIMESTAMP`. Foreign-key actions support `NO ACTION`, `RESTRICT`, `SET NULL`, `SET DEFAULT`,
+and `CASCADE`. Collection properties are arrays, and names and schema properties are unique without
+regard to case.
+
+For database-specific DDL that is not represented by the structured model, use `-Query` or
+`-InputFile`.
+
+Runnable [minimal and advanced creation examples](examples/README.md) cover every input mode and are
+executed by the repository test suite.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `Add-SqliteRow` | Insert dictionaries or objects with a prepared statement and transaction. |
+| `New-SqliteDatabase` | Safely create a database from a PowerShell object, JSON schema, or SQL. |
 | `New-SqliteConnection` | Create and optionally open a reusable SQLite connection. |
 | `Get-SqliteRow` | Select rows with structured filters, projection, ordering, and paging. |
 | `Invoke-SqliteQuery` | Execute SQL and return PowerShell or ADO.NET results. |
@@ -154,7 +210,12 @@ Bundled SQLite versions are pinned in `tools/SQLiteDependencies.psd1`. Maintaine
 ./tools/Update-SqliteRuntime.ps1 -All
 ```
 
-The scheduled maintenance canary checks for newer stable build and SQLite dependencies. When changes are available, it refreshes the committed runtime assets, increments the module patch version, updates the changelog, validates the exact candidate, and opens a publish-ready pull request.
+The scheduled dependency canary uses the shared `PSDependencyCanary` task to
+baseline-test the committed build, stage newer PowerShell dependencies, bootstrap
+the candidate, and run the same test task again. Build-only updates change only
+`requirements.psd1`; runtime dependency updates also patch-bump the module and
+update its changelog. Bundled SQLite runtime refreshes remain an explicit
+maintainer operation through `Update-SqliteRuntime.ps1`.
 
 PlatyPS source documentation is stored under `docs/en-US`. GitHub Actions validates PowerShell 7 on Windows, Linux, and macOS, plus Windows PowerShell 5.1.
 

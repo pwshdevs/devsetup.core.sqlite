@@ -1,6 +1,6 @@
 @{
     RootModule = 'devsetup.core.sqlite.psm1'
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '1.1.0'
     CompatiblePSEditions = @('Desktop', 'Core')
     GUID = '94cc58ab-63cf-43d0-9978-bb124a56691b'
     Author = 'PwshDevs'
@@ -17,6 +17,7 @@
         'Invoke-SqliteBulkCopy'
         'Invoke-SqliteQuery'
         'New-SqliteConnection'
+        'New-SqliteDatabase'
         'Remove-SqliteRow'
         'Set-SqliteRow'
     )
