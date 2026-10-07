@@ -28,6 +28,12 @@ function Get-DevSetupSQLiteRuntimeIdentifier {
 }
 
 $processArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+# .NET Framework exposes RuntimeInformation on supported Windows releases but
+# returns an empty ProcessArchitecture value in some Windows PowerShell 5.1
+# hosts. Bitness is authoritative there because Windows PowerShell is x86/x64.
+if ([string]::IsNullOrWhiteSpace($processArchitecture) -and $PSEdition -ne 'Core') {
+    $processArchitecture = if ([Environment]::Is64BitProcess) { 'X64' } else { 'X86' }
+}
 
 if ($PSEdition -eq 'Core') {
     if ($IsLinux) {

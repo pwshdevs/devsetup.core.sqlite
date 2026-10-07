@@ -41,4 +41,6 @@ task Default -depends Test
 
 task Test -FromModule PowerShellBuild -minimumVersion '0.8.2'
 
+task Canary -FromModule PSDependencyCanary -minimumVersion '1.0.0'
+
 task Publish -FromModule PowerShellBuild -minimumVersion '0.8.2'

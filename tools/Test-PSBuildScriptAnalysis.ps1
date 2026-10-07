@@ -14,7 +14,7 @@ function Test-PSBuildScriptAnalysis {
     .PARAMETER SettingsPath
         Path to the PSScriptAnalyzer settings file.
     .EXAMPLE
-        Test-PSBuildScriptAnalysis -Path ./Output/devsetup.core.sqlite/1.0.0 -SeverityThreshold Error
+        Test-PSBuildScriptAnalysis -Path ./Output/devsetup.core.sqlite/1.1.0 -SeverityThreshold Error
 
         Analyzes the staged module and fails when an error-level diagnostic is found.
     #>

@@ -9,6 +9,7 @@ BeforeAll {
     }
 
     $manifestData = Import-PowerShellDataFile -Path $sourceManifest
+    $script:ExpectedModuleVersion = [string]$manifestData.ModuleVersion
     $projectRoot = if ($env:BHProjectPath) {
         $env:BHProjectPath
     } else {
@@ -110,7 +111,7 @@ Describe "devsetup.core.sqlite runtime assets PS$script:PSVersion" {
         It 'loads under the devsetup.core.sqlite identity' {
             $module = Get-Module devsetup.core.sqlite
             $module.Name | Should -Be 'devsetup.core.sqlite'
-            $module.Version.ToString() | Should -Be '1.0.0'
+            $module.Version.ToString() | Should -Be $script:ExpectedModuleVersion
             $module.Guid.ToString() | Should -Be '94cc58ab-63cf-43d0-9978-bb124a56691b'
             @(Get-Module PSSQLite).Count | Should -Be 0
             (Get-Command ConvertTo-SqliteDataTable -Module devsetup.core.sqlite).Name | Should -Be 'ConvertTo-SqliteDataTable'

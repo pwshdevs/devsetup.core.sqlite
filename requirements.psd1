@@ -20,6 +20,9 @@
     'PowerShellBuild' = @{
         Version = '0.8.2'
     }
+    'PSDependencyCanary' = @{
+        Version = '1.0.0'
+    }
     'PSScriptAnalyzer' = @{
         Version = '1.25.0'
     }

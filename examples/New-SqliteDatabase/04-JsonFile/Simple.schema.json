@@ -1,0 +1,11 @@
+{
+  "tables": [
+    {
+      "name": "Customers",
+      "columns": [
+        { "name": "Id", "type": "INTEGER", "primaryKey": true, "autoIncrement": true },
+        { "name": "Name", "type": "TEXT", "nullable": false }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "userVersion": 8,
+  "tables": [
+    {
+      "name": "Warehouses",
+      "strict": true,
+      "columns": [
+        { "name": "Id", "type": "INTEGER", "primaryKey": true },
+        { "name": "Name", "type": "TEXT", "nullable": false, "unique": true }
+      ]
+    },
+    {
+      "name": "Products",
+      "strict": true,
+      "columns": [
+        { "name": "Sku", "type": "TEXT", "primaryKey": true, "collation": "NOCASE" },
+        { "name": "DisplayName", "type": "TEXT", "nullable": false },
+        { "name": "Active", "type": "INTEGER", "nullable": false, "default": true }
+      ],
+      "indexes": [
+        { "name": "IX_Products_DisplayName", "columns": ["DisplayName"] }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "strict": true,
+      "withoutRowId": true,
+      "columns": [
+        { "name": "WarehouseId", "type": "INTEGER", "nullable": false },
+        { "name": "Sku", "type": "TEXT", "nullable": false, "collation": "NOCASE" },
+        { "name": "Quantity", "type": "INTEGER", "nullable": false, "default": 0 },
+        { "name": "UpdatedAt", "type": "TEXT", "nullable": false, "defaultExpression": "CURRENT_TIMESTAMP" }
+      ],
+      "primaryKey": ["WarehouseId", "Sku"],
+      "foreignKeys": [
+        {
+          "columns": ["WarehouseId"],
+          "references": { "table": "Warehouses", "columns": ["Id"] },
+          "onDelete": "CASCADE"
+        },
+        {
+          "columns": ["Sku"],
+          "references": { "table": "Products", "columns": ["Sku"] },
+          "onDelete": "CASCADE",
+          "onUpdate": "CASCADE"
+        }
+      ],
+      "indexes": [
+        { "name": "IX_Inventory_UpdatedAt", "columns": ["UpdatedAt"] }
+      ]
+    }
+  ]
+}
