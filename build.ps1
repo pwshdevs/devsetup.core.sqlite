@@ -98,6 +98,11 @@ if ($Bootstrap.IsPresent) {
     }
 }
 
+# Baseline builds run in a fresh process without Bootstrap. Load the pinned
+# Pester before task discovery can import PowerShellBuild and its dependencies.
+$requirements = Import-PowerShellDataFile -LiteralPath (Join-Path $PSScriptRoot 'requirements.psd1')
+Import-Module Pester -RequiredVersion $requirements.Pester.Version -ErrorAction Stop
+
 # Execute psake task(s)
 $psakeFile = './psakeFile.ps1'
 if ($PSCmdlet.ParameterSetName -eq 'Help') {
