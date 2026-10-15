@@ -26,7 +26,7 @@ jobs:
         shell: pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
-          $minimumCanaryVersion = '1.1.0'
+          $minimumCanaryVersion = '1.1.1'
           Get-PackageProvider -Name NuGet -ForceBootstrap | Out-Null
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module -Name PSDependencyCanary -MinimumVersion $minimumCanaryVersion -Repository PSGallery -Scope CurrentUser -Force

@@ -24,7 +24,7 @@
         DependsOn = 'Pester'
     }
     'PSDependencyCanary' = @{
-        Version = '1.0.0'
+        Version = '1.1.1'
     }
     'PSScriptAnalyzer' = @{
         Version = '1.25.0'
